@@ -1303,6 +1303,143 @@ const music = new MusicManager();
 window.music = music;
 
 // ═══════════════════════════════════════════════════════════════════════
+//  SFX MANAGER — 18 one-shot / looped .wav files
+//  Layered on top of existing procedural audio (does not replace
+//  ambientAudio drones, the chimney crackle, the bell tone, etc. — it
+//  simply adds sampled sounds for specific triggers).
+// ═══════════════════════════════════════════════════════════════════════
+class SfxManager {
+  constructor() {
+    this.scene = null;
+    this.sounds = {};
+    this.unlocked = false;
+    this.muted = false;
+    this._queue = [];
+    // Per-trigger base volumes as specified in the integration brief.
+    // These are multiplied by gameState.sfxVolume (master SFX slider).
+    this.base = {
+      dialogue_advance:   0.70,
+      dialogue_open:      0.65,
+      choice_select:      0.75,
+      thread_knot:        0.85,
+      shrine_glow:        0.60,
+      door_baba:          0.80,
+      knock_brel:         0.85,
+      footsteps_dirt:     0.50,
+      footsteps_grass:    0.45,
+      firefly_jar:        0.80,
+      codex_reveal:       0.85,
+      quest_complete:     0.90,
+      perimeter_complete: 0.55,
+      observation_breath: 0.40,
+      domovoi_crackle:    0.50,
+      vision_whoosh:      0.70,
+      idol_eyes:          0.95,
+      crow_caw:           0.65,
+    };
+    this._keys = Object.keys(this.base);
+  }
+  preload(scene) {
+    for (const key of this._keys) {
+      try {
+        if (!scene.cache.audio.exists(key)) {
+          scene.load.audio(key, 'assets/sfx/' + key + '.wav');
+        }
+      } catch (e) {}
+    }
+    // Any loaderror is silently ignored (game continues without that SFX).
+    scene.load.on('loaderror', (file) => {
+      if (file && file.key && this.base[file.key] != null) {
+        console.warn('[sfx] failed to load', file.key);
+      }
+    });
+  }
+  bind(scene) {
+    this.scene = scene;
+    for (const key of this._keys) {
+      try {
+        if (scene.cache.audio.exists(key) && !this.sounds[key]) {
+          this.sounds[key] = scene.sound.add(key, { volume: 0, loop: false });
+        }
+      } catch (e) {}
+    }
+  }
+  unlock() {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    const q = this._queue.slice(); this._queue.length = 0;
+    for (const fn of q) { try { fn(); } catch (e) {} }
+  }
+  _gated(fn) {
+    if (!this.unlocked) { this._queue.push(fn); return; }
+    fn();
+  }
+  _master() {
+    if (this.muted) return 0;
+    const v = (gameState && typeof gameState.sfxVolume === 'number')
+      ? gameState.sfxVolume : 0.85;
+    return v;
+  }
+  // Play a one-shot sample at its base volume × master.
+  play(key, opts = {}) {
+    this._gated(() => {
+      const s = this.sounds[key]; if (!s) return;
+      const base = (opts.volume != null ? opts.volume : this.base[key]) || 0.5;
+      const vol = base * this._master();
+      try {
+        if (s.isPlaying && !opts.overlap) s.stop();
+        s.setVolume(vol);
+        s.setLoop(false);
+        s.play();
+      } catch (e) {}
+    });
+  }
+  // Start a looped sample with a fade-in.
+  loop(key, targetMul = 1, fadeMs = 250) {
+    this._gated(() => {
+      const s = this.sounds[key]; if (!s) return;
+      const target = this.base[key] * targetMul * this._master();
+      try {
+        s.setLoop(true);
+        if (!s.isPlaying) { s.setVolume(0); s.play(); }
+        s._sfxTargetMul = targetMul;
+        this._tween(key, target, fadeMs);
+      } catch (e) {}
+    });
+  }
+  // Stop a looped sample with a fade-out.
+  stopLoop(key, fadeMs = 250) {
+    this._gated(() => {
+      const s = this.sounds[key]; if (!s || !s.isPlaying) return;
+      this._tween(key, 0, fadeMs, () => { try { s.stop(); } catch (e) {} });
+    });
+  }
+  _tween(key, targetVol, ms, onDone) {
+    const s = this.sounds[key]; if (!s || !this.scene) return;
+    const proxy = { v: s.volume || 0 };
+    this.scene.tweens.add({
+      targets: proxy, v: targetVol, duration: ms,
+      onUpdate: () => { try { s.setVolume(proxy.v); } catch (e) {} },
+      onComplete: () => { try { s.setVolume(targetVol); } catch (e) {}
+                          if (onDone) onDone(); },
+    });
+  }
+  // Re-apply the master multiplier to any currently playing looped sfx
+  // (called when the Settings slider moves or mute toggles).
+  applyMaster() {
+    for (const key of this._keys) {
+      const s = this.sounds[key]; if (!s || !s.isPlaying) continue;
+      const mul = s._sfxTargetMul != null ? s._sfxTargetMul : 1;
+      const target = this.base[key] * mul * this._master();
+      try { s.setVolume(target); } catch (e) {}
+    }
+  }
+  toggleMute() { this.muted = !this.muted; this.applyMaster(); return this.muted; }
+}
+const sfx = new SfxManager();
+window.sfx = sfx;
+
+// ═══════════════════════════════════════════════════════════════════════
 //  MAIN GAME SCENE
 // ═══════════════════════════════════════════════════════════════════════
 class GameScene extends Phaser.Scene {
@@ -1314,6 +1451,7 @@ class GameScene extends Phaser.Scene {
 
   preload() {
     music.preload(this);
+    sfx.preload(this);
     // Generate ground tile variants procedurally — 4 variants each so no
     // two tiles look identical. No strokes/symbols on the diamonds.
     for (let i = 0; i < 4; i++) {
@@ -1646,13 +1784,19 @@ class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown', () => ambientAudio.init(), { once: false });
     // Music manager — bind to this scene + unlock on first keypress
     music.bind(this);
+    sfx.bind(this);
     this.input.keyboard.on('keydown', () => {
       music.unlock();
+      sfx.unlock();
       // Begin Wyrdów ambient bed once the player is in the village
       music.startAmbient();
+      if (!this._crowEntryFired) {
+        this._crowEntryFired = true;
+        setTimeout(() => { try { sfx.play('crow_caw'); } catch (e) {} }, 2500);
+      }
     }, { once: false });
-    // M — global music mute toggle (does not affect procedural ambience)
-    this.input.keyboard.on('keydown-M', () => music.toggleMute());
+    // M — global music + sfx mute toggle (does not affect procedural ambience)
+    this.input.keyboard.on('keydown-M', () => { music.toggleMute(); sfx.toggleMute(); });
     // Default master multiplier
     if (gameState.musicVolume == null) gameState.musicVolume = 0.8;
 
@@ -5358,8 +5502,10 @@ class GameScene extends Phaser.Scene {
   openDialogue(name, lines, onClose, style) {
     if (this.dialogueActive) return;
     this.dialogueActive = true;
+    try { sfx.play('dialogue_open'); } catch (e) {}
     // Baba's leitmotif rises with her dialogue
     if (typeof music !== 'undefined' && /Baba/.test(name || '')) {
+      try { sfx.play('door_baba'); } catch (e) {}
       music.startBaba();
     }
     this.dialogueLines = lines;
@@ -5559,6 +5705,7 @@ class GameScene extends Phaser.Scene {
     if (index < 0 || index >= opts.length) return;
 
     const chosen = opts[index];
+    try { sfx.play('choice_select'); } catch (e) {}
     this.choiceActive = false;
     this.hideChoices();
 
@@ -5609,6 +5756,7 @@ class GameScene extends Phaser.Scene {
 
     // If a choice is showing, don't advance with E — need number keys
     if (this.choiceActive) return;
+    try { sfx.play('dialogue_advance'); } catch (e) {}
 
     // If typewriter still going, skip to end of current page
     if (!this.typewriterDone) {
@@ -5644,7 +5792,7 @@ class GameScene extends Phaser.Scene {
   }
 
   // ── PAUSE MENU (Esc) ─────────────────────────────────────────────
-  // Lightweight overlay with Resume / Return to Menu.
+  // Overlay with Resume / Return to Menu / Close Game.
   togglePauseMenu() {
     if (this.dialogueActive) return; // Esc shouldn't fight dialogue
     if (this._pauseLayer) { this._closePauseMenu(); return; }
@@ -5652,7 +5800,8 @@ class GameScene extends Phaser.Scene {
     const W = cam.width, H = cam.height;
     const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.6).setOrigin(0, 0);
-    const pw = 360, ph = 200;
+    // Taller panel to fit three comfortably-spaced options
+    const pw = 360, ph = 260;
     const px = (W - pw) / 2, py = (H - ph) / 2;
     const panel = this.add.graphics();
     panel.fillStyle(0x1a1410, 0.96); panel.fillRoundedRect(px, py, pw, ph, 6);
@@ -5660,20 +5809,48 @@ class GameScene extends Phaser.Scene {
     const title = this.add.text(W / 2, py + 30, 'Paused', {
       fontFamily: 'Georgia, serif', fontSize: '22px', color: '#c8922a',
     }).setOrigin(0.5);
-    const resume = this.add.text(W / 2, py + 90, 'Resume', {
-      fontFamily: 'Georgia, serif', fontSize: '18px', color: '#e8dfc0',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    const ret = this.add.text(W / 2, py + 130, 'Return to Menu', {
-      fontFamily: 'Georgia, serif', fontSize: '18px', color: '#e8dfc0',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    // Three options, 42px spacing
+    const makeOpt = (label, y, onClick) => {
+      const t = this.add.text(W / 2, y, label, {
+        fontFamily: 'Georgia, serif', fontSize: '18px', color: '#e8dfc0',
+        stroke: '#1a0e08', strokeThickness: 2,
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      t.on('pointerover', () => t.setColor('#c8922a'));
+      t.on('pointerout',  () => t.setColor('#e8dfc0'));
+      t.on('pointerdown', onClick);
+      return t;
+    };
+    const resume    = makeOpt('Resume',         py + 86,  () => this._closePauseMenu());
+    const ret       = makeOpt('Return to Menu', py + 128, () => this._returnToMenu());
+    const closeGame = makeOpt('Close Game',     py + 170, () => this._closeGame());
     const hint = this.add.text(W / 2, py + ph - 22, 'Esc to resume', {
       fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic', color: '#a89878',
     }).setOrigin(0.5);
-    layer.add([dim, panel, title, resume, ret, hint]);
-    resume.on('pointerdown', () => this._closePauseMenu());
-    ret.on('pointerdown', () => this._returnToMenu());
+    // Slot for the "press Alt+F4…" fallback message after Close Game
+    this._pauseCloseMsg = this.add.text(W / 2, py + 200, '', {
+      fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic',
+      color: '#c8b878', wordWrap: { width: pw - 40 }, align: 'center',
+    }).setOrigin(0.5);
+    layer.add([dim, panel, title, resume, ret, closeGame, hint, this._pauseCloseMsg]);
     this._pauseLayer = layer;
     this.physics && this.physics.world && this.physics.world.pause && this.physics.world.pause();
+  }
+
+  // Try to close the browser window/tab. Most modern browsers block
+  // window.close() unless the tab was opened via script, so we show
+  // the platform-appropriate shortcut as a fallback.
+  _closeGame() {
+    try { saveGame(); } catch (e) {}
+    try { window.close(); } catch (e) {}
+    // If the window is still open after a tick, the browser blocked it.
+    setTimeout(() => {
+      if (!this._pauseCloseMsg) return;
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || '');
+      const msg = isMac
+        ? 'Press Cmd+Q (Mac) to close, or close this tab.'
+        : 'Press Alt+F4 (Windows) to close, or close this tab.';
+      this._pauseCloseMsg.setText(msg);
+    }, 120);
   }
   _closePauseMenu() {
     if (!this._pauseLayer) return;
@@ -5878,6 +6055,7 @@ class GameScene extends Phaser.Scene {
           this.interactPrompt.setVisible(false);
           MARKERS[i].placed = true;
           gameState.knotsPlaced++;
+          try { sfx.play('thread_knot'); } catch (e) {}
           try { saveGame(); } catch (e) {}
           gameState.markersFound.push(MARKERS[i].id);
           if (typeof music !== 'undefined') music.onKnotPlaced(gameState.knotsPlaced);
@@ -5978,6 +6156,7 @@ class GameScene extends Phaser.Scene {
   triggerVision(index) {
     // Player stumble — 2-frame down/up over 0.3s before transition
     this.triggerPlayerStumble();
+    try { sfx.play('vision_whoosh'); } catch (e) {}
     this.visionActive = true;
     const v = this.getVisionData(index);
     const cam = this.cameras.main;
@@ -6117,6 +6296,7 @@ class GameScene extends Phaser.Scene {
             scene.straightenRoads();
             setTimeout(() => {
               gameState.questComplete = true;
+              try { sfx.play('quest_complete'); } catch (e) {}
               scene.triggerPoludnica();
             }, 2200);
           }, 1500);
@@ -6932,6 +7112,7 @@ class GameScene extends Phaser.Scene {
     setTimeout(() => {
       // Idol eyes animation
       scene.drawIdolEyes(true);
+      try { sfx.play('idol_eyes'); } catch (e) {}
       scene.playLowBellTone();
       setTimeout(() => {
         scene.drawIdolEyes(false);
@@ -6959,6 +7140,7 @@ class GameScene extends Phaser.Scene {
   }
 
   playKnockSFX() {
+    try { sfx.play('knock_brel'); } catch (e) {}
     if (!ambientAudio.ctx) return;
     const ctx = ambientAudio.ctx;
     const now = ctx.currentTime;
@@ -7808,6 +7990,7 @@ class GameScene extends Phaser.Scene {
           gameState.hasGlassCharm = true;
           gameState.inventory.push('cure_codex_fragment_1');
           gameState.inventory.push('glass_charm');
+          try { sfx.play('codex_reveal'); } catch (e) {}
           gameState.codexFragmentCollected = true; try { saveGame(); } catch (e) {}
           this.showItemNotification('Received: Cure Codex Fragment · Glass Charm');
           // Advance to Act 2 after this conversation
@@ -7871,6 +8054,7 @@ class GameScene extends Phaser.Scene {
     if (gameState.questComplete && !gameState.zuzkaFarewellDone) {
       return {
         lines: ZUZKA_DIALOGUE.farewell,
+        _fireflySfx: (() => { try { setTimeout(() => sfx.play('firefly_jar'), 800); } catch (e) {} return true; })(),
         onClose: () => {
           gameState.zuzkaFarewellDone = true;
           gameState.hasFirefly = true;
@@ -8113,6 +8297,36 @@ class GameScene extends Phaser.Scene {
 
     const px = this.playerCartX, py = this.playerCartY;
 
+    // ── Shrine glow proximity SFX (once per approach) ──
+    if (!this._shrineSfxState) this._shrineSfxState = shrines.map(() => false);
+    for (let si = 0; si < shrines.length; si++) {
+      const d = Math.hypot(px - shrines[si].x, py - shrines[si].y);
+      if (d <= 2.2 && !this._shrineSfxState[si]) {
+        this._shrineSfxState[si] = true;
+        try { sfx.play('shrine_glow'); } catch (e) {}
+      } else if (d > 4) {
+        this._shrineSfxState[si] = false;
+      }
+    }
+
+    // ── Footstep SFX — crossfade by tile type ──
+    {
+      const tx = Math.max(0, Math.min(MAP_SIZE - 1, Math.round(px)));
+      const ty = Math.max(0, Math.min(MAP_SIZE - 1, Math.round(py)));
+      const tile = (map[ty] && map[ty][tx]) || 0;
+      const onRoad = (tile === 1 || tile === 2 || tile === 5);
+      const canWalk = moving && !this.dialogueActive && !this.visionActive && !this._paused;
+      if (canWalk) {
+        if (onRoad) {
+          try { sfx.loop('footsteps_dirt', 1, 250); sfx.stopLoop('footsteps_grass', 250); } catch (e) {}
+        } else {
+          try { sfx.loop('footsteps_grass', 1, 250); sfx.stopLoop('footsteps_dirt', 250); } catch (e) {}
+        }
+      } else {
+        try { sfx.stopLoop('footsteps_dirt', 200); sfx.stopLoop('footsteps_grass', 200); } catch (e) {}
+      }
+    }
+
     // ── Ritual 1: Perimeter waypoints ──
     if (!gameState.ritualState.perimeter_walked) {
       let allHit = true;
@@ -8124,6 +8338,7 @@ class GameScene extends Phaser.Scene {
       }
       if (allHit) {
         gameState.ritualState.perimeter_walked = true;
+        try { sfx.play('perimeter_complete'); } catch (e) {}
         if (!gameState.regencyFired.perimeter_walked) {
           gameState.regencyFired.perimeter_walked = true;
           adjustAttention(-1, 'perimeter_walked');
@@ -8583,12 +8798,14 @@ class GameScene extends Phaser.Scene {
   speakDomovoi(lines, onDone) {
     if (!lines || !lines.length) { if (onDone) onDone(); return; }
     this._domovoiSpeaking = true;
+    try { sfx.loop('domovoi_crackle', 1, 400); } catch (e) {}
     const scene = this;
     const cam = this.cameras.main;
     let i = 0;
     const playLine = () => {
       if (i >= lines.length) {
         this._domovoiSpeaking = false;
+        try { sfx.stopLoop('domovoi_crackle', 600); } catch (e) {}
         if (onDone) onDone();
         return;
       }
@@ -8966,6 +9183,7 @@ class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this._obsVignette, alpha: 1, duration: 500 });
     // Faint held-breath ambience
     this.startObservationBreath();
+    try { sfx.loop('observation_breath', 1, 500); } catch (e) {}
     // Trigger any zone the player is currently inside (one-shot per session)
     const px = this.playerCartX, py = this.playerCartY;
     let matched = null;
@@ -8994,6 +9212,7 @@ class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this._obsVignette, alpha: 0, duration: 400 });
     // Stop held-breath audio
     this.stopObservationBreath();
+    try { sfx.stopLoop('observation_breath', 500); } catch (e) {}
   }
 
   startObservationBreath() {
@@ -9152,13 +9371,15 @@ class OpeningScene extends Phaser.Scene {
 
   preload() {
     music.preload(this);
+    sfx.preload(this);
   }
 
   create() {
     music.bind(this);
-    this.input.keyboard.on('keydown', () => music.unlock(), { once: false });
-    // M — global music mute toggle (does not affect procedural ambience)
-    this.input.keyboard.on('keydown-M', () => music.toggleMute());
+    sfx.bind(this);
+    this.input.keyboard.on('keydown', () => { music.unlock(); sfx.unlock(); }, { once: false });
+    // M — global music + sfx mute toggle (does not affect procedural ambience)
+    this.input.keyboard.on('keydown-M', () => { music.toggleMute(); sfx.toggleMute(); });
     const cam = this.cameras.main;
     const W = cam.width, H = cam.height;
     cam.setBackgroundColor(0x000000);
@@ -10056,18 +10277,19 @@ class OpeningScene extends Phaser.Scene {
 class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenuScene'); }
 
-  preload() { music.preload(this); }
+  preload() { music.preload(this); sfx.preload(this); }
 
   create() {
     music.bind(this);
+    sfx.bind(this);
     const cam = this.cameras.main;
     const W = cam.width, H = cam.height;
     cam.setBackgroundColor(0x0d0818);
     this._W = W; this._H = H;
 
     // Unlock audio on first input
-    this.input.keyboard.on('keydown', () => music.unlock(), { once: false });
-    this.input.on('pointerdown',     () => music.unlock(), { once: false });
+    this.input.keyboard.on('keydown', () => { music.unlock(); sfx.unlock(); }, { once: false });
+    this.input.on('pointerdown',     () => { music.unlock(); sfx.unlock(); }, { once: false });
 
     // ── LAYER 1: SKY ───────────────────────────────────────────────
     const sky = this.add.graphics().setDepth(-20);
@@ -10556,7 +10778,7 @@ class MainMenuScene extends Phaser.Scene {
                         music._ambientNaturalTarget = v;
                         music._recomputeAmbient(200); } },
       { label: 'SFX',     key: 'sfxVolume',
-        apply: (v) => { gameState.sfxVolume = v; } },
+        apply: (v) => { gameState.sfxVolume = v; try { sfx.applyMaster(); } catch (e) {} } },
     ];
     sliders.forEach((sl, idx) => {
       const sy = py + 80 + idx * 56;
