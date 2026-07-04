@@ -33,8 +33,8 @@
     <div style="letter-spacing:.35em; color:#c8922a; font-size:20px; margin-bottom:6px;">WYRDÓW</div>
     <div style="color:#8a6a40; font-size:11px; margin-bottom:22px;">◆ ─────── ◆</div>
     <p style="color:#e8dfc0; font-size:15px; line-height:1.6; margin-bottom:12px;">Wyrdów is best travelled with a&nbsp;keyboard.</p>
-    <p style="color:#a89878; font-style:italic; font-size:13px; line-height:1.6; margin-bottom:26px;">Please visit on a computer — the roads are hard to walk by touch.</p>
-    <button id="mobile-continue" style="background:none; border:1px solid rgba(200,146,42,.5); border-radius:4px; color:#c8922a; font-family:Georgia,serif; font-size:13px; padding:8px 18px; cursor:pointer;">Continue anyway</button>
+    <p style="color:#a89878; font-style:italic; font-size:13px; line-height:1.6; margin-bottom:26px;">Touch controls are provided, but the roads are easier to walk on a&nbsp;computer.</p>
+    <button id="mobile-continue" style="background:none; border:1px solid rgba(200,146,42,.5); border-radius:4px; color:#c8922a; font-family:Georgia,serif; font-size:13px; padding:8px 18px; cursor:pointer;">Continue with touch</button>
   </div>
 </div>
 <script>
@@ -42,13 +42,109 @@
 (function () {
   try {
     var n = document.getElementById('mobile-notice');
+    var isTouch = window.matchMedia('(pointer: coarse)').matches
+               && !window.matchMedia('(pointer: fine)').matches;
     document.getElementById('mobile-continue').addEventListener('click', function () {
       n.style.display = 'none';
+      var tc = document.getElementById('touch-controls');
+      if (tc && isTouch) tc.style.display = 'block';
     });
-    var coarse = window.matchMedia('(pointer: coarse)').matches;
-    var fine = window.matchMedia('(pointer: fine)').matches;
-    if (coarse && !fine) n.style.display = 'flex';
+    if (isTouch) n.style.display = 'flex';
   } catch (e) {}
+})();
+
+// ── TOUCH CONTROLS ──────────────────────────────────────────────────
+// A virtual joystick (left) and action buttons (right) that synthesize
+// the same keyboard events the game already listens for — the entire
+// input layer (movement, E-interact, O-observe, journal, pause,
+// dialogue choices) works unchanged.
+(function () {
+  var wrap = document.createElement('div');
+  wrap.id = 'touch-controls';
+  wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:50; pointer-events:none; font-family:Georgia,serif; -webkit-user-select:none; user-select:none;';
+  wrap.innerHTML =
+    '<div id="tc-stick" style="pointer-events:auto; position:absolute; left:24px; bottom:28px; width:128px; height:128px; border-radius:50%; background:rgba(14,14,20,.35); border:1px solid rgba(200,146,42,.35);">' +
+      '<div id="tc-thumb" style="position:absolute; left:44px; top:44px; width:40px; height:40px; border-radius:50%; background:rgba(200,146,42,.45); border:1px solid rgba(200,146,42,.7);"></div>' +
+    '</div>' +
+    '<div style="pointer-events:auto; position:absolute; right:20px; bottom:28px; display:flex; flex-direction:column; gap:10px; align-items:flex-end;">' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="tc-btn" data-key="1|Digit1|49" style="width:40px;height:40px;">1</button>' +
+        '<button class="tc-btn" data-key="2|Digit2|50" style="width:40px;height:40px;">2</button>' +
+        '<button class="tc-btn" data-key="3|Digit3|51" style="width:40px;height:40px;">3</button>' +
+      '</div>' +
+      '<div style="display:flex; gap:10px; align-items:flex-end;">' +
+        '<button class="tc-btn" data-key="j|KeyJ|74" style="width:48px;height:48px;">J</button>' +
+        '<button class="tc-btn" data-key="o|KeyO|79" data-hold="1" style="width:56px;height:56px;">O</button>' +
+        '<button class="tc-btn" data-key="e|KeyE|69" style="width:64px;height:64px;font-size:20px;">E</button>' +
+      '</div>' +
+      '<button class="tc-btn" data-key="Escape|Escape|27" style="width:40px;height:40px;">☰</button>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  // Shared button styling
+  var style = document.createElement('style');
+  style.textContent = '.tc-btn{background:rgba(14,14,20,.5); border:1px solid rgba(200,146,42,.5); border-radius:50%; color:#c8922a; font-family:Georgia,serif; font-size:16px; touch-action:none;} .tc-btn:active{background:rgba(200,146,42,.35);}';
+  document.head.appendChild(style);
+
+  function kev(type, key, code, keyCode) {
+    window.dispatchEvent(new KeyboardEvent(type, {
+      key: key, code: code, keyCode: keyCode, which: keyCode,
+      bubbles: true, cancelable: true,
+    }));
+  }
+  // Action buttons — tap = keydown, release = keyup (hold works for O)
+  wrap.querySelectorAll('.tc-btn').forEach(function (btn) {
+    var parts = btn.getAttribute('data-key').split('|');
+    var key = parts[0], code = parts[1], kc = parseInt(parts[2], 10);
+    var down = function (ev) { ev.preventDefault(); kev('keydown', key, code, kc); };
+    var up = function (ev) { ev.preventDefault(); kev('keyup', key, code, kc); };
+    btn.addEventListener('touchstart', down, { passive: false });
+    btn.addEventListener('touchend', up, { passive: false });
+    btn.addEventListener('touchcancel', up, { passive: false });
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('mouseup', up);
+  });
+
+  // Virtual joystick — vector → four synthetic arrow-key states
+  var stick = wrap.querySelector('#tc-stick');
+  var thumb = wrap.querySelector('#tc-thumb');
+  var dirState = { up: false, down: false, left: false, right: false };
+  var DIRS = {
+    up:    ['ArrowUp', 'ArrowUp', 38],
+    down:  ['ArrowDown', 'ArrowDown', 40],
+    left:  ['ArrowLeft', 'ArrowLeft', 37],
+    right: ['ArrowRight', 'ArrowRight', 39],
+  };
+  function setDir(name, active) {
+    if (dirState[name] === active) return;
+    dirState[name] = active;
+    var d = DIRS[name];
+    kev(active ? 'keydown' : 'keyup', d[0], d[1], d[2]);
+  }
+  function releaseAll() {
+    for (var k in dirState) setDir(k, false);
+    thumb.style.left = '44px'; thumb.style.top = '44px';
+  }
+  function handle(ev) {
+    ev.preventDefault();
+    var touch = ev.touches ? ev.touches[0] : ev;
+    var r = stick.getBoundingClientRect();
+    var dx = touch.clientX - (r.left + r.width / 2);
+    var dy = touch.clientY - (r.top + r.height / 2);
+    var len = Math.hypot(dx, dy);
+    var max = r.width / 2 - 20;
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    thumb.style.left = (44 + dx) + 'px';
+    thumb.style.top = (44 + dy) + 'px';
+    var dead = 12;
+    setDir('up',    dy < -dead);
+    setDir('down',  dy >  dead);
+    setDir('left',  dx < -dead);
+    setDir('right', dx >  dead);
+  }
+  stick.addEventListener('touchstart', handle, { passive: false });
+  stick.addEventListener('touchmove', handle, { passive: false });
+  stick.addEventListener('touchend', function (ev) { ev.preventDefault(); releaseAll(); }, { passive: false });
+  stick.addEventListener('touchcancel', releaseAll);
 })();
 </script>
 <script>
@@ -196,6 +292,9 @@ function adjustAttention(amount, reason) {
   gameState.regencyAttention += amount;
   // Quiet by design — uncomment for debugging:
   // console.log('[regency]', reason, amount, '=>', gameState.regencyAttention);
+  // Threshold crossings leave one diegetic tell each (GameScene consumes)
+  if (gameState.regencyAttention >= 3)       gameState._attnTell = 'high';
+  else if (gameState.regencyAttention <= -3) gameState._attnTell = 'low';
 }
 
 // ── Baba Elżbieta — NPC position & full dialogue tree ───────────────
@@ -341,6 +440,8 @@ const gameState = {
   musicVolume: 0.8,           // 0..1 — applied as master multiplier on MusicManager
   ambientVolume: 0.65,        // 0..1 — natural target for procedural ambient bed
   sfxVolume: 0.8,             // 0..1 — reserved for future SFX bus
+  instantText: false,         // skip the dialogue typewriter entirely
+  textScale: 1,               // 1 = normal, 1.2 = large dialogue text
 };
 
 // ── SAVE SYSTEM ─────────────────────────────────────────────────────
@@ -380,6 +481,8 @@ function saveSettings() {
       musicVolume: gameState.musicVolume,
       ambientVolume: gameState.ambientVolume,
       sfxVolume: gameState.sfxVolume,
+      instantText: gameState.instantText,
+      textScale: gameState.textScale,
     }));
   } catch (e) {}
 }
@@ -390,6 +493,8 @@ function loadSettings() {
     if (typeof s.musicVolume === 'number') gameState.musicVolume = s.musicVolume;
     if (typeof s.ambientVolume === 'number') gameState.ambientVolume = s.ambientVolume;
     if (typeof s.sfxVolume === 'number') gameState.sfxVolume = s.sfxVolume;
+    if (typeof s.instantText === 'boolean') gameState.instantText = s.instantText;
+    if (typeof s.textScale === 'number') gameState.textScale = s.textScale;
   } catch (e) {}
 }
 loadSettings();
@@ -561,11 +666,13 @@ const BABA_DIALOGUE = {
   // 0–1 knots placed
   checkIn_early: [
     "You're back already? Did you forget something? ...You forgot where to go, didn't you. The markers will itch your hand. Walk slowly. Pay attention. The village will show you.",
+    "And when you have a spare evening — walk the village bounds. All the way round, sunwise. The old wards remember who bothers to greet them.",
   ],
 
   // 2–3 knots placed
   checkIn_mid: [
     "You can feel it, can't you? The roads pulling a little straighter. Like a spine after a long sleep. Good. Keep going. You're doing well. Don't tell anyone I said that.",
+    "One more thing. If you're out past dusk near the marsh — the quiet places — stand still a while. What watches from the corner of your eye is shy, not cruel. There's a difference.",
   ],
 
   // 4 knots placed
@@ -789,12 +896,14 @@ const ZUZKA_DIALOGUE = {
   quest_early: [
     "I can feel something changing. Like when a tooth comes loose — you can't see it moving but you can feel it will.",
     "One of the markers is near the dead tree on the east road. I used to climb it before it died. It's still a good tree. Just tired.",
+    "Oh — when the noon bell rings, stand still until it stops. Everyone does. Even the chickens. Especially the chickens.",
   ],
 
   quest_mid: [
     "The roads look different. Not to my eyes — to my feet. They feel more certain about where they're going.",
     ">She looks at her jar.",
     "I think the fireflies felt it too. One of them moved.",
+    "My grandmother used to leave food in the bowl by the inn door. For the house-spirit. Bread first — always bread first, then salt, then something that matters to you. She was very strict about the order.",
   ],
 
   quest_done: [
@@ -5796,8 +5905,9 @@ class GameScene extends Phaser.Scene {
     // Name sits in the 16px top padding band, x = box (24) + 28 = 52
     this.dialogueName.setPosition(52, panelY + 8);
 
-    // Body text — uniform 14px (~85% of original 16px)
-    this.dialogueText.setFontSize('14px');
+    // Body text — 14px base, scaled by the Text Size setting
+    const textPx = Math.round(14 * (gameState.textScale || 1));
+    this.dialogueText.setFontSize(textPx + 'px');
 
     // Stage direction vs spoken line
     const rawLine = entry;
@@ -5825,7 +5935,7 @@ class GameScene extends Phaser.Scene {
 
     // ── PAGINATION ────────────────────────────────────────────────
     // Wrap the full target, then chunk into pages that fit the box.
-    const lineHeight = 14 + 9; // fontSize + lineSpacing
+    const lineHeight = textPx + 9; // fontSize + lineSpacing
     const availH = panelH - 38 - 40; // panelH - top(name+pad) - bottom pad
     const maxLines = Math.max(1, Math.floor(availH / lineHeight));
     const wrapped = this.dialogueText.getWrappedText(this.typewriterTarget);
@@ -5844,6 +5954,14 @@ class GameScene extends Phaser.Scene {
     this.dialogueContinue.setVisible(false);
 
     if (this.typewriterTimer) this.typewriterTimer.remove();
+    // Instant Text setting: render the whole page at once
+    if (gameState.instantText) {
+      this.typewriterPos = this.typewriterTarget.length;
+      this.dialogueText.setText(this.typewriterTarget);
+      this.typewriterDone = true;
+      this._showContinuePrompt();
+      return;
+    }
     this.typewriterTimer = this.time.addEvent({
       delay: 30, callback: this.tickTypewriter, callbackScope: this, loop: true,
     });
@@ -5987,6 +6105,13 @@ class GameScene extends Phaser.Scene {
       this.dialogueText.setText('');
       this.dialogueContinue.setVisible(false);
       if (this.typewriterTimer) this.typewriterTimer.remove();
+      if (gameState.instantText) {
+        this.typewriterPos = this.typewriterTarget.length;
+        this.dialogueText.setText(this.typewriterTarget);
+        this.typewriterDone = true;
+        this._showContinuePrompt();
+        return;
+      }
       this.typewriterTimer = this.time.addEvent({
         delay: 30, callback: this.tickTypewriter, callbackScope: this, loop: true,
       });
@@ -6090,7 +6215,7 @@ class GameScene extends Phaser.Scene {
     const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(3100);
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0, 0);
     layer.add(dim);
-    const pw = 460, ph = 320;
+    const pw = 460, ph = 408;
     const px = (W - pw) / 2, py = (H - ph) / 2;
     const panel = this.add.graphics();
     panel.fillStyle(0x1a1410, 0.96); panel.fillRoundedRect(px, py, pw, ph, 6);
@@ -6132,6 +6257,32 @@ class GameScene extends Phaser.Scene {
         sl.apply(v);
         saveSettings();
       });
+    });
+
+    // Text options — instant text + text size toggles
+    const textToggles = [
+      { label: 'Instant text',
+        get: () => (gameState.instantText ? 'On' : 'Off'),
+        cycle: () => { gameState.instantText = !gameState.instantText; } },
+      { label: 'Text size',
+        get: () => ((gameState.textScale || 1) > 1 ? 'Large' : 'Normal'),
+        cycle: () => { gameState.textScale = (gameState.textScale || 1) > 1 ? 1 : 1.2; } },
+    ];
+    textToggles.forEach((tgl, tIdx) => {
+      const tRowY = py + 248 + tIdx * 36;
+      const tLbl = this.add.text(px + 30, tRowY, tgl.label, {
+        fontFamily: 'Georgia, serif', fontSize: '16px', color: '#e8dfc0',
+      });
+      layer.add(tLbl);
+      const tBtn = this.add.text(px + pw - 130, tRowY, '[ ' + tgl.get() + ' ]', {
+        fontFamily: 'Georgia, serif', fontSize: '16px', color: '#c8922a',
+      }).setInteractive({ useHandCursor: true });
+      tBtn.on('pointerdown', () => {
+        tgl.cycle();
+        tBtn.setText('[ ' + tgl.get() + ' ]');
+        saveSettings();
+      });
+      layer.add(tBtn);
     });
 
     // Fullscreen toggle
@@ -8632,6 +8783,8 @@ class GameScene extends Phaser.Scene {
     }
 
     this.handleMovement(delta);
+    this.updateThreadGuidance(time, delta);
+    this.updateRegencyTells();
     this.updatePlayerPosition();
     this.updateEzra(time, delta);
     this.updateMarta(time, delta);
@@ -8719,6 +8872,122 @@ class GameScene extends Phaser.Scene {
     this.playerSprite.x = iso.x + this.worldOffset.x + (this.playerFxOffsetX || 0);
     this.playerSprite.y = iso.y + this.worldOffset.y + (this.playerFxOffsetY || 0);
     this.playerSprite._sortY = this.playerSprite.y;
+  }
+
+  // ── REGENCY ATTENTION TELLS ────────────────────────────────────────
+  // The meter itself stays invisible, but crossing a threshold leaves
+  // one soft diegetic mark: high attention — a crow lands nearby and
+  // watches; low attention — the wayside shrines pulse warm for a beat.
+  updateRegencyTells() {
+    if (!gameState._attnTell || this._attnTellBusy) return;
+    if (this.dialogueActive || this.visionActive || this._paused || this._pauseLayer) return;
+    const kind = gameState._attnTell;
+    gameState._attnTell = null;
+    if (kind === 'high' && !this._attnHighShown) {
+      this._attnHighShown = true; this._attnTellBusy = true;
+      this._showWatcherCrow();
+    } else if (kind === 'low' && !this._attnLowShown) {
+      this._attnLowShown = true; this._attnTellBusy = true;
+      this._showShrineWarmth();
+    }
+  }
+
+  _showWatcherCrow() {
+    // A second crow — not the idol's — lands two tiles from the player,
+    // watches for six seconds, and leaves without comment.
+    const px = Phaser.Math.Clamp(this.playerCartX + 2, 1, MAP_SIZE - 2);
+    const py = Phaser.Math.Clamp(this.playerCartY + 1, 1, MAP_SIZE - 2);
+    const iso = cartToIso(px, py);
+    const wx = iso.x + this.worldOffset.x, wy = iso.y + this.worldOffset.y;
+    const g = this.add.graphics().setDepth(996).setAlpha(0);
+    // Small hunched crow, facing the player
+    g.fillStyle(0x14121a, 1);
+    g.fillEllipse(wx, wy - 4, 9, 6);             // body
+    g.fillCircle(wx - 4, wy - 8, 3);             // head
+    g.fillTriangle(wx - 7, wy - 8, wx - 10, wy - 7, wx - 7, wy - 6); // beak
+    g.fillStyle(0x2a2836, 1);
+    g.fillEllipse(wx + 1, wy - 5, 5, 3);         // wing sheen
+    g.fillStyle(0xc8922a, 0.9);
+    g.fillRect(wx - 5, wy - 9, 1, 1);            // one amber eye — watching
+    g.y = -14;
+    this.tweens.add({ targets: g, alpha: 1, y: 0, duration: 700, ease: 'Sine.easeOut' });
+    try { sfx.play('crow_caw', { volume: 0.35 }); } catch (e) {}
+    this.time.delayedCall(6000, () => {
+      this.tweens.add({
+        targets: g, alpha: 0, y: -18, duration: 600, ease: 'Sine.easeIn',
+        onComplete: () => { g.destroy(); this._attnTellBusy = false; },
+      });
+    });
+  }
+
+  _showShrineWarmth() {
+    // All four shrines breathe warm amber, once, together.
+    const g = this.add.graphics().setDepth(995);
+    try { sfx.play('shrine_glow', { volume: 0.35 }); } catch (e) {}
+    const proxy = { t: 0 };
+    this.tweens.add({
+      targets: proxy, t: Math.PI, duration: 4200, ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const a = Math.sin(proxy.t) * 0.35;
+        g.clear();
+        for (const s of shrines) {
+          const iso = cartToIso(s.x, s.y);
+          const x = iso.x + this.worldOffset.x, y = iso.y + this.worldOffset.y;
+          g.fillStyle(0xffc878, a * 0.4); g.fillCircle(x, y - 14, 22);
+          g.fillStyle(0xffe0a0, a);       g.fillCircle(x, y - 14, 9);
+        }
+      },
+      onComplete: () => { g.destroy(); this._attnTellBusy = false; },
+    });
+  }
+
+  // ── THREAD GUIDANCE SHIMMER ────────────────────────────────────────
+  // Baba's blue thread is soaked in wine — it remembers where it wants
+  // to go. When the player stands still mid-quest, faint blue motes
+  // drift from their hand toward the nearest unplaced marker. Guidance
+  // without a minimap.
+  updateThreadGuidance(time, delta) {
+    const active = gameState.knotsGiven && gameState.knotsPlaced < 5
+      && !this.dialogueActive && !this.visionActive
+      && !this._paused && !this._pauseLayer;
+    const moving = this.cursors && (this.cursors.up.isDown || this.cursors.down.isDown
+      || this.cursors.left.isDown || this.cursors.right.isDown);
+    if (!active || moving) {
+      this._threadStill = 0;
+      if (this._threadGfx) this._threadGfx.clear();
+      return;
+    }
+    this._threadStill = (this._threadStill || 0) + delta;
+    if (this._threadStill < 1500) return; // begins after a beat of stillness
+
+    // Nearest unplaced marker
+    let best = null, bestD = Infinity;
+    for (const m of MARKERS) {
+      if (m.placed) continue;
+      const d = Math.hypot(this.playerCartX - m.x, this.playerCartY - m.y);
+      if (d < bestD) { bestD = d; best = m; }
+    }
+    if (!best) { if (this._threadGfx) this._threadGfx.clear(); return; }
+
+    if (!this._threadGfx) this._threadGfx = this.add.graphics().setDepth(997);
+    const g = this._threadGfx; g.clear();
+    const pIso = cartToIso(this.playerCartX, this.playerCartY);
+    const mIso = cartToIso(best.x, best.y);
+    const sx = pIso.x + this.worldOffset.x;
+    const sy = pIso.y + this.worldOffset.y - 20; // from the hand, not the feet
+    const ang = Math.atan2(mIso.y - pIso.y, mIso.x - pIso.x);
+    // Five motes cycling outward along the direction, with a soft wobble
+    const cycle = (time % 2400) / 2400;
+    for (let i = 0; i < 5; i++) {
+      const f = (cycle + i * 0.2) % 1;
+      const dist = 14 + f * 46;
+      const wob = Math.sin(time * 0.004 + i * 1.7) * 3;
+      const x = sx + Math.cos(ang) * dist - Math.sin(ang) * wob;
+      const y = sy + Math.sin(ang) * dist + Math.cos(ang) * wob;
+      const a = (1 - f) * 0.55;
+      g.fillStyle(0x6688cc, a * 0.5); g.fillCircle(x, y, 3);
+      g.fillStyle(0x9ab4ee, a);       g.fillCircle(x, y, 1.5);
+    }
   }
 
   // ── NPC INTERACTION (state-aware) ──────────────────────────────────
@@ -11969,7 +12238,7 @@ class MainMenuScene extends Phaser.Scene {
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0, 0);
     layer.add(dim);
     // parchment panel
-    const pw = 460, ph = 320;
+    const pw = 460, ph = 408;
     const px = (W - pw) / 2, py = (H - ph) / 2;
     const panel = this.add.graphics();
     panel.fillStyle(0x1a1410, 0.96); panel.fillRoundedRect(px, py, pw, ph, 6);
@@ -12013,6 +12282,32 @@ class MainMenuScene extends Phaser.Scene {
         sl.apply(v);
         saveSettings();
       });
+    });
+
+    // Text options — instant text + text size toggles
+    const textToggles = [
+      { label: 'Instant text',
+        get: () => (gameState.instantText ? 'On' : 'Off'),
+        cycle: () => { gameState.instantText = !gameState.instantText; } },
+      { label: 'Text size',
+        get: () => ((gameState.textScale || 1) > 1 ? 'Large' : 'Normal'),
+        cycle: () => { gameState.textScale = (gameState.textScale || 1) > 1 ? 1 : 1.2; } },
+    ];
+    textToggles.forEach((tgl, tIdx) => {
+      const tRowY = py + 248 + tIdx * 36;
+      const tLbl = this.add.text(px + 30, tRowY, tgl.label, {
+        fontFamily: 'Georgia, serif', fontSize: '16px', color: '#e8dfc0',
+      });
+      layer.add(tLbl);
+      const tBtn = this.add.text(px + pw - 130, tRowY, '[ ' + tgl.get() + ' ]', {
+        fontFamily: 'Georgia, serif', fontSize: '16px', color: '#c8922a',
+      }).setInteractive({ useHandCursor: true });
+      tBtn.on('pointerdown', () => {
+        tgl.cycle();
+        tBtn.setText('[ ' + tgl.get() + ' ]');
+        saveSettings();
+      });
+      layer.add(tBtn);
     });
 
     // Fullscreen toggle
