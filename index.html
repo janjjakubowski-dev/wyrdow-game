@@ -239,6 +239,13 @@ const gameState = {
   firstVillageEntry: false, // becomes true after Zuzka's auto-approach has played
   inventory: [],
 
+  // ── Memory Journal ──
+  journal: {
+    entries: [],        // array of entry IDs in collection order
+    unread: [],         // array of unread entry IDs
+    selectedEntry: null,// currently selected entry ID
+  },
+
   // ── Observation mechanic ──
   observedZones: [],          // array of zone IDs already observed this session
 
@@ -324,6 +331,10 @@ function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
     const snap = JSON.parse(raw);
     Object.assign(gameState, snap);
+    // Ensure journal structure for old saves
+    if (!gameState.journal) gameState.journal = { entries: [], unread: [], selectedEntry: null };
+    if (!gameState.journal.entries) gameState.journal.entries = [];
+    if (!gameState.journal.unread) gameState.journal.unread = [];
     gameState.hasSave = true;
     return true;
   } catch (e) { console.warn('loadGame failed', e); return false; }
@@ -350,6 +361,86 @@ function loadSettings() {
   } catch (e) {}
 }
 loadSettings();
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MEMORY JOURNAL — entry definitions + helper
+// ═══════════════════════════════════════════════════════════════════════
+function addJournalEntry(entryId) {
+  if (!gameState.journal) gameState.journal = { entries: [], unread: [], selectedEntry: null };
+  if (!gameState.journal.entries.includes(entryId)) {
+    gameState.journal.entries.push(entryId);
+    gameState.journal.unread.push(entryId);
+    try { saveGame(); } catch (e) {}
+  }
+}
+
+const JOURNAL_ENTRIES = {
+  // ── Visions ──
+  vision_1: {
+    title: 'The Hands at the Crossroads', type: 'vision', category: 'Vision',
+    text: "I looked at my hands and one of them was answering a question I hadn\u2019t asked yet. Someone stopped the woman who was writing. Someone with larger hands and a calm voice. It isn\u2019t time, they said. I am beginning to think it never was, for them.",
+  },
+  vision_2: {
+    title: 'The Counting Child', type: 'vision', category: 'Vision',
+    text: "A child counting in three languages, stopping at three. A door with wrong light under it. The counting resumed after the door closed \u2014 quieter, but it resumed. That matters. The counting resumed.",
+  },
+  vision_3: {
+    title: 'The Laboratory Window', type: 'vision', category: 'Vision',
+    text: "Someone understood something important and was about to show me their face. The vision ended there. I think that\u2019s deliberate. I think I have to earn the rest.",
+  },
+  vision_4: {
+    title: 'The Runner in the Night', type: 'vision', category: 'Vision',
+    text: "Five pieces. Five towns. They can\u2019t search everywhere. The person running knew exactly what they were doing. The cold lights behind them did not need to hurry. That detail stays with me.",
+  },
+  vision_5: {
+    title: 'The Last Song', type: 'vision', category: 'Vision',
+    text: "They sang until they couldn\u2019t. Then one voice kept going. Then silence. Then someone said: you are carrying it now. I didn\u2019t choose this. I am choosing to carry it anyway. I think that\u2019s the difference.",
+  },
+  // ── NPC revelations ──
+  baba_revelation: {
+    title: 'Baba El\u017Cbieta: The Roads Are Wrong', type: 'npc', category: 'Conversation',
+    text: "She read my fate from a burnt braid and told me not to be flattered that the mark chose me. She said it chose someone ordinary enough not to break. I am trying to decide if that\u2019s an insult. I don\u2019t think it is.",
+  },
+  ezra_boots: {
+    title: 'Ezra: The Boots Without an Owner', type: 'npc', category: 'Conversation',
+    text: "He has been mending the same boots for eleven years. He says the owner will come back eventually. He says this with complete certainty. The sole pattern matches someone from the third vision. I didn\u2019t tell him. I\u2019m not sure he needs to know.",
+  },
+  domovoi_watching: {
+    title: 'The Domovoi: Eleven Days of Watching', type: 'npc', category: 'Conversation',
+    text: "A house spirit, two hundred years old, frightened by a man with a clipboard. Not because he\u2019s cruel, he said. Because he\u2019s certain. I keep thinking about that. Certainty as the thing that doesn\u2019t stop.",
+  },
+  ibbur_rivka: {
+    title: 'The Ibbur: Rivka\u2019s Name', type: 'npc', category: 'Conversation',
+    text: "She borrowed someone else\u2019s voice to tell me: the cure worked. The Regency erased it not because it failed but because it required something they couldn\u2019t control. Belief. Community. The old ways working. Her name was Rivka. I will not forget it.",
+  },
+  nocnica_cost: {
+    title: 'Nocnica: What the Mark Costs', type: 'npc', category: 'Conversation',
+    text: "She watched my hand the entire time. Not my face. She had seen the mark before, on someone who didn\u2019t reach the end. She said that person made it far enough. I am still deciding what far enough means.",
+  },
+  // ── Observations ──
+  observe_idol: {
+    title: 'The Idol\u2019s Eyes', type: 'observe', category: 'Discovery',
+    text: "They were closed when I arrived. I am certain of this. They are open now. I have decided not to think too hard about when the change happened.",
+  },
+  observe_board: {
+    title: 'The Board Replaced From Inside', type: 'observe', category: 'Discovery',
+    text: "One board on the inn window is newer than the others. It was replaced from the inside. The Domovoi doesn\u2019t touch the ground. Something is maintaining that building carefully. I find this more comforting than I probably should.",
+  },
+  observe_firefly: {
+    title: 'The Firefly That Matches the Mark', type: 'observe', category: 'Discovery',
+    text: "Zuzka\u2019s jar contains several fireflies. One pulses in the same rhythm as the mark on my hand. She has been carrying it for some time. I don\u2019t think she knows what it means. I don\u2019t think I do either.",
+  },
+  // ── Document ──
+  doc_rivka: {
+    title: 'Project RIVKA \u2014 Internal Memorandum', type: 'document', category: 'Document',
+    text: "They knew before the Collapse. They were watching before they had a reason to watch. Which means someone told them. The report says the methodology is more viable than expected. It says this like a warning to itself.",
+  },
+  // ── Ritual ──
+  ritual_roads: {
+    title: 'The Roads Remember', type: 'ritual', category: 'Ritual',
+    text: "The roads straightened. Not dramatically \u2014 just became more certain about where they go. Po\u0142udnica appeared at noon and looked at my hand and nodded. Baba El\u017Cbieta\u2019s bells rang on their own. I think I did something real today.",
+  },
+};
 gameState.hasSave = hasSavedGame();
 window.saveGame = saveGame;
 window.loadGame = loadGame;
@@ -1343,7 +1434,7 @@ class SfxManager {
     for (const key of this._keys) {
       try {
         if (!scene.cache.audio.exists(key)) {
-          scene.load.audio(key, 'assets/sfx/' + key + '.wav');
+          scene.load.audio(key, 'assets/audio/sfx/' + key + '.wav');
         }
       } catch (e) {}
     }
@@ -1779,6 +1870,11 @@ class GameScene extends Phaser.Scene {
     this.playerFacing = 'se'; // current facing direction
     // ESC opens the in-game pause menu (Resume / Return to Menu)
     this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu());
+    // J toggles the Memory Journal
+    this.input.keyboard.on('keydown-J', () => this.toggleJournal());
+    this._journalOpen = false;
+    this._journalContainer = null;
+    this._journalSelection = 0;
 
     // Start audio on first key press
     this.input.keyboard.on('keydown', () => ambientAudio.init(), { once: false });
@@ -4654,6 +4750,7 @@ class GameScene extends Phaser.Scene {
       // Ibbur scenes
       if (ms.ibburScene === 0) {
         ms.ibburScene = 1;
+        try { addJournalEntry('ibbur_rivka'); } catch (e) {}
         lines.push(
           "Child of the road. The mark on your hand is a door.",
           "We have walked this village before, in another mouth, in another year.",
@@ -5869,6 +5966,620 @@ class GameScene extends Phaser.Scene {
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  //  MEMORY JOURNAL — open book UI
+  // ═══════════════════════════════════════════════════════════════════
+  toggleJournal() {
+    if (this._journalOpen) { this._closeJournal(); return; }
+    // Block during dialogue, vision, or pause menu
+    if (this.dialogueActive || this.visionActive || this._paused) return;
+    this._openJournal();
+  }
+
+  _openJournal() {
+    this._journalOpen = true;
+    this._paused = true; // freeze gameplay
+    try { sfx.play('dialogue_open'); } catch (e) {}
+    const cam = this.cameras.main;
+    const W = cam.width, H = cam.height;
+    const dpr = window.devicePixelRatio || 1;
+
+    const container = this.add.container(0, 0).setDepth(9500).setAlpha(0).setScrollFactor(0);
+    this._journalContainer = container;
+
+    // Dim backdrop
+    const dim = this.add.graphics();
+    dim.fillStyle(0x000000, 0.85);
+    dim.fillRect(0, 0, W, H);
+    container.add(dim);
+
+    // Book dimensions
+    const BOOK_W = Math.round(W * 0.80);
+    const BOOK_H = Math.round(H * 0.75);
+    const bx = Math.round((W - BOOK_W) / 2);
+    const by = Math.round((H - BOOK_H) / 2);
+    const SPINE_X = Math.round(W / 2);
+    const PAGE_W = Math.round((BOOK_W - 12) / 2); // 12px spine
+    const PAGE_H = BOOK_H - 24; // inset from cover
+    const LEFT_X = bx + 6;
+    const RIGHT_X = SPINE_X + 6;
+    const PAGE_Y = by + 12;
+
+    // Draw book
+    const book = this.add.graphics();
+    // Leather cover shadow
+    book.fillStyle(0x0a0604, 0.6);
+    book.fillRoundedRect(bx + 5, by + 6, BOOK_W, BOOK_H, 6);
+    // Leather cover
+    book.fillStyle(0x2a1a0e, 1);
+    book.fillRoundedRect(bx, by, BOOK_W, BOOK_H, 6);
+    // Worn leather texture — subtle variation
+    book.fillStyle(0x33200f, 0.4);
+    book.fillRect(bx + 10, by + 2, BOOK_W - 20, 4);
+    book.fillRect(bx + 10, by + BOOK_H - 6, BOOK_W - 20, 4);
+    // Spine
+    book.fillStyle(0x1e120a, 1);
+    book.fillRect(SPINE_X - 6, by, 12, BOOK_H);
+    book.lineStyle(1, 0x3a2a1e, 0.5);
+    book.strokeRect(SPINE_X - 6, by, 12, BOOK_H);
+    // Rune stamp on spine
+    const ry = by + Math.round(BOOK_H / 2);
+    book.fillStyle(0x3a2a1e, 0.8);
+    book.fillCircle(SPINE_X, ry, 8);
+    book.lineStyle(1, 0x4a3a2a, 0.6);
+    book.strokeCircle(SPINE_X, ry, 8);
+    book.strokeCircle(SPINE_X, ry, 5);
+    book.fillStyle(0x4a3a2a, 0.7);
+    book.fillCircle(SPINE_X, ry, 2);
+    // Left page
+    book.fillStyle(0xf0e8d0, 1);
+    book.fillRect(LEFT_X, PAGE_Y, PAGE_W, PAGE_H);
+    // Left page edge wear — darker at edges
+    book.fillStyle(0xd8d0b8, 0.35);
+    book.fillRect(LEFT_X, PAGE_Y, 8, PAGE_H);
+    book.fillRect(LEFT_X, PAGE_Y, PAGE_W, 5);
+    book.fillRect(LEFT_X, PAGE_Y + PAGE_H - 5, PAGE_W, 5);
+    // Right page
+    book.fillStyle(0xf4ecd8, 1);
+    book.fillRect(RIGHT_X, PAGE_Y, PAGE_W, PAGE_H);
+    // Right page edge wear
+    book.fillStyle(0xdcd4bc, 0.35);
+    book.fillRect(RIGHT_X + PAGE_W - 8, PAGE_Y, 8, PAGE_H);
+    book.fillRect(RIGHT_X, PAGE_Y, PAGE_W, 5);
+    book.fillRect(RIGHT_X, PAGE_Y + PAGE_H - 5, PAGE_W, 5);
+    // Page fold shadow at spine
+    book.fillStyle(0xc0b898, 0.3);
+    book.fillRect(LEFT_X + PAGE_W - 6, PAGE_Y, 6, PAGE_H);
+    book.fillRect(RIGHT_X, PAGE_Y, 6, PAGE_H);
+    container.add(book);
+
+    // ── LEFT PAGE: Header ──
+    const lpx = LEFT_X + 24; // left padding
+    const lpy = PAGE_Y + 18;
+    // Diamond rule at top
+    this._journalDrawRule(container, LEFT_X + PAGE_W / 2, lpy, PAGE_W - 60);
+    // Town header
+    const townHdr = this.add.text(LEFT_X + PAGE_W / 2, lpy + 18, 'W Y R D \u00d3 W', {
+      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#6a5030',
+    }).setOrigin(0.5, 0.5).setResolution(dpr);
+    container.add(townHdr);
+
+    // ── Entry list ──
+    const entries = (gameState.journal.entries || []).filter(id => JOURNAL_ENTRIES[id]);
+    const listTop = lpy + 42;
+    const listH = PAGE_H - 90;
+    const ROW_H = 28;
+    const MAX_VISIBLE = Math.min(Math.floor(listH / ROW_H), 14);
+    this._journalEntries = entries;
+    this._journalSelection = 0;
+    this._journalScrollOffset = 0;
+    this._journalMaxVisible = MAX_VISIBLE;
+    this._journalListTop = listTop;
+    this._journalLeftX = lpx;
+    this._journalLeftPageCX = LEFT_X + PAGE_W / 2;
+    this._journalLeftPageW = PAGE_W;
+    this._journalRightX = RIGHT_X;
+    this._journalRightW = PAGE_W;
+    this._journalPageY = PAGE_Y;
+    this._journalPageH = PAGE_H;
+    this._journalRowH = ROW_H;
+    this._journalDpr = dpr;
+
+    // Entry list items (will be rebuilt on scroll/selection change)
+    this._journalListItems = [];
+    this._journalRightItems = [];
+    this._buildJournalList(container);
+    this._buildJournalRight(container);
+
+    // Page number bottom-left
+    const pageNum = this.add.text(LEFT_X + PAGE_W / 2, PAGE_Y + PAGE_H - 14, 'I.', {
+      fontFamily: 'Georgia, serif', fontSize: '11px', fontStyle: 'italic', color: '#a08860',
+    }).setOrigin(0.5, 0.5).setResolution(dpr);
+    container.add(pageNum);
+    // Tiny margin note
+    const marginNote = this.add.text(LEFT_X + PAGE_W - 16, PAGE_Y + PAGE_H - 8,
+      'There are four more towns.', {
+        fontFamily: 'Georgia, serif', fontSize: '8px', fontStyle: 'italic', color: '#c0b098',
+    }).setOrigin(1, 1).setResolution(dpr);
+    container.add(marginNote);
+
+    // Close hint bottom-right of right page
+    const closeHint = this.add.text(RIGHT_X + PAGE_W - 16, PAGE_Y + PAGE_H - 10,
+      '[J] to close', {
+        fontFamily: 'Georgia, serif', fontSize: '9px', fontStyle: 'italic', color: '#b0a080',
+    }).setOrigin(1, 1).setResolution(dpr);
+    container.add(closeHint);
+
+    // Fade in
+    this.tweens.add({ targets: container, alpha: 1, duration: 400, ease: 'Sine.easeOut' });
+
+    // Keyboard: up/down/E/Enter navigate, J/ESC close
+    this._journalKeyHandler = (e) => {
+      const key = e.key || '';
+      if (key === 'ArrowUp' || key === 'Up') {
+        this._journalMoveSelection(-1);
+      } else if (key === 'ArrowDown' || key === 'Down') {
+        this._journalMoveSelection(1);
+      } else if (key === 'e' || key === 'E' || key === 'Enter') {
+        this._journalSelectEntry();
+      }
+    };
+    this.input.keyboard.on('keydown', this._journalKeyHandler);
+  }
+
+  _closeJournal() {
+    if (!this._journalOpen) return;
+    this._journalOpen = false;
+    try { sfx.play('dialogue_open'); } catch (e) {}
+    if (this._journalKeyHandler) {
+      this.input.keyboard.off('keydown', this._journalKeyHandler);
+      this._journalKeyHandler = null;
+    }
+    const c = this._journalContainer;
+    if (c) {
+      this.tweens.add({
+        targets: c, alpha: 0, duration: 300, ease: 'Sine.easeIn',
+        onComplete: () => { c.destroy(); this._journalContainer = null; this._paused = false; },
+      });
+    } else {
+      this._paused = false;
+    }
+  }
+
+  // Icon helpers — draw 3-4px icons for each entry type
+  _journalIcon(type) {
+    // Returns { char, color } for a text-based mini icon
+    switch (type) {
+      case 'vision':   return { ch: '\u25C9', col: '#7a6a50' }; // ◉ eye
+      case 'npc':      return { ch: '\u25EC', col: '#7a6a50' }; // ◬ speech
+      case 'observe':  return { ch: '\u25CB', col: '#7a6a50' }; // ○ magnifying
+      case 'document': return { ch: '\u25A3', col: '#7a6a50' }; // ▣ seal
+      case 'ritual':   return { ch: '\u2726', col: '#7a6a50' }; // ✦ knot
+      default:         return { ch: '\u2022', col: '#7a6a50' }; // •
+    }
+  }
+
+  _journalDrawRule(container, cx, y, width) {
+    const g = this.add.graphics();
+    const half = width / 2;
+    g.lineStyle(1, 0x8a6a40, 0.6);
+    g.beginPath(); g.moveTo(cx - half, y); g.lineTo(cx - 8, y); g.strokePath();
+    g.beginPath(); g.moveTo(cx + 8, y); g.lineTo(cx + half, y); g.strokePath();
+    g.fillStyle(0x8a6a40, 0.8);
+    g.fillTriangle(cx, y - 4, cx + 4, y, cx, y + 4);
+    g.fillTriangle(cx, y - 4, cx - 4, y, cx, y + 4);
+    container.add(g);
+  }
+
+  _buildJournalList(container) {
+    // Destroy previous
+    for (const item of this._journalListItems) { try { item.destroy(); } catch (e) {} }
+    this._journalListItems = [];
+    const entries = this._journalEntries;
+    if (!entries.length) {
+      const empty = this.add.text(this._journalLeftPageCX, this._journalListTop + 40,
+        'No entries yet.', {
+          fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic', color: '#a09070',
+      }).setOrigin(0.5, 0).setResolution(this._journalDpr);
+      container.add(empty);
+      this._journalListItems.push(empty);
+      return;
+    }
+    const offset = this._journalScrollOffset;
+    const max = this._journalMaxVisible;
+    const visible = entries.slice(offset, offset + max);
+    visible.forEach((id, i) => {
+      const def = JOURNAL_ENTRIES[id]; if (!def) return;
+      const y = this._journalListTop + i * this._journalRowH;
+      const isSelected = (offset + i === this._journalSelection);
+      const isUnread = gameState.journal.unread.includes(id);
+      // Selection highlight
+      if (isSelected) {
+        const hl = this.add.graphics();
+        hl.fillStyle(0xe8d8b0, 0.45);
+        hl.fillRoundedRect(this._journalLeftX - 4, y - 2, this._journalLeftPageW - 48, this._journalRowH - 2, 3);
+        container.add(hl);
+        this._journalListItems.push(hl);
+      }
+      // Unread amber dot
+      if (isUnread) {
+        const dot = this.add.graphics();
+        dot.fillStyle(0xc8922a, 1);
+        dot.fillCircle(this._journalLeftX - 8, y + 8, 3);
+        container.add(dot);
+        this._journalListItems.push(dot);
+      }
+      // Icon
+      const icon = this._journalIcon(def.type);
+      const iconText = this.add.text(this._journalLeftX + 2, y + 1, icon.ch, {
+        fontFamily: 'Georgia, serif', fontSize: '12px', color: icon.col,
+      }).setOrigin(0, 0).setResolution(this._journalDpr);
+      container.add(iconText);
+      this._journalListItems.push(iconText);
+      // Title
+      const titleColor = isSelected ? '#3a2a0e' : '#5a4a30';
+      const titleText = this.add.text(this._journalLeftX + 22, y + 1, def.title, {
+        fontFamily: 'Georgia, serif', fontSize: '12px', color: titleColor,
+      }).setOrigin(0, 0).setResolution(this._journalDpr);
+      container.add(titleText);
+      this._journalListItems.push(titleText);
+    });
+    // Scroll indicators
+    if (offset > 0) {
+      const up = this.add.text(this._journalLeftPageCX, this._journalListTop - 8, '\u25B2', {
+        fontFamily: 'Georgia, serif', fontSize: '10px', color: '#a09070',
+      }).setOrigin(0.5, 0.5).setResolution(this._journalDpr);
+      container.add(up);
+      this._journalListItems.push(up);
+    }
+    if (offset + max < entries.length) {
+      const dn = this.add.text(this._journalLeftPageCX,
+        this._journalListTop + max * this._journalRowH + 4, '\u25BC', {
+          fontFamily: 'Georgia, serif', fontSize: '10px', color: '#a09070',
+      }).setOrigin(0.5, 0.5).setResolution(this._journalDpr);
+      container.add(dn);
+      this._journalListItems.push(dn);
+    }
+  }
+
+  _buildJournalRight(container) {
+    for (const item of this._journalRightItems) { try { item.destroy(); } catch (e) {} }
+    this._journalRightItems = [];
+    const dpr = this._journalDpr;
+    const rx = this._journalRightX + 24;
+    const rw = this._journalRightW - 48;
+    const ry = this._journalPageY + 24;
+    const cx = this._journalRightX + this._journalRightW / 2;
+
+    const entries = this._journalEntries;
+    const sel = entries[this._journalSelection];
+    const def = sel ? JOURNAL_ENTRIES[sel] : null;
+
+    if (!def) {
+      // Empty state — idol illustration + prompt
+      const idleIllust = this._drawJournalIllustration(container, cx, ry + 60, 'idle');
+      // Prompt
+      const prompt = this.add.text(cx, ry + 140, 'Select an entry to read.', {
+        fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic', color: '#a09070',
+      }).setOrigin(0.5, 0).setResolution(dpr);
+      container.add(prompt);
+      this._journalRightItems.push(prompt);
+      return;
+    }
+
+    // Entry header
+    let curY = ry + 6;
+    const titleText = this.add.text(cx, curY, def.title, {
+      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#3a2a0e',
+    }).setOrigin(0.5, 0).setResolution(dpr);
+    container.add(titleText);
+    this._journalRightItems.push(titleText);
+    curY += 26;
+    // Diamond rule
+    this._journalDrawRule(container, cx, curY, rw - 20);
+    curY += 10;
+    // Category label
+    const catText = this.add.text(cx, curY, def.category, {
+      fontFamily: 'Georgia, serif', fontSize: '11px', fontStyle: 'italic', color: '#8a7a5a',
+    }).setOrigin(0.5, 0).setResolution(dpr);
+    container.add(catText);
+    this._journalRightItems.push(catText);
+    curY += 22;
+    // Illustration
+    this._drawJournalIllustration(container, cx, curY + 30, sel);
+    curY += 80;
+    // Entry text — handwritten style
+    const bodyText = this.add.text(cx, curY, def.text, {
+      fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic',
+      color: '#4a3a20', wordWrap: { width: rw, useAdvancedWrap: true },
+      lineSpacing: 10,
+    }).setOrigin(0.5, 0).setResolution(dpr);
+    container.add(bodyText);
+    this._journalRightItems.push(bodyText);
+  }
+
+  _drawJournalIllustration(container, cx, cy, entryId) {
+    const g = this.add.graphics();
+    const px = (x, y, w, h, color, a) => { g.fillStyle(color, a || 1); g.fillRect(cx - 40 + x, cy - 30 + y, w || 2, h || 2); };
+
+    if (entryId === 'idle') {
+      // Wyrdów idol with 5 roads
+      g.lineStyle(1, 0x5a4a30, 0.7);
+      // Five roads radiating
+      const angles = [-90, -36, 36, 108, 180];
+      for (const a of angles) {
+        const rad = a * Math.PI / 180;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(cx + Math.cos(rad) * 28, cy + Math.sin(rad) * 28);
+        g.strokePath();
+      }
+      // Idol body
+      g.fillStyle(0x5a4a30, 0.8);
+      g.fillRect(cx - 3, cy - 18, 6, 20);
+      g.fillRect(cx - 8, cy - 12, 16, 3);
+      // Head
+      g.fillCircle(cx, cy - 22, 5);
+      // Eyes
+      g.fillStyle(0xc8922a, 0.9);
+      g.fillRect(cx - 3, cy - 23, 2, 1);
+      g.fillRect(cx + 1, cy - 23, 2, 1);
+    } else if (entryId === 'vision_1') {
+      // Two hands, one glowing
+      g.lineStyle(1, 0x5a4a30, 0.6);
+      // Left hand
+      g.beginPath(); g.moveTo(cx - 18, cy); g.lineTo(cx - 18, cy - 14); g.strokePath();
+      g.beginPath(); g.moveTo(cx - 22, cy - 8); g.lineTo(cx - 22, cy - 18); g.strokePath();
+      g.beginPath(); g.moveTo(cx - 14, cy - 8); g.lineTo(cx - 14, cy - 18); g.strokePath();
+      g.fillStyle(0x5a4a30, 0.4);
+      g.fillRect(cx - 24, cy - 2, 14, 8);
+      // Right hand (glowing)
+      g.fillStyle(0xc8922a, 0.2);
+      g.fillCircle(cx + 18, cy - 4, 16);
+      g.lineStyle(1, 0xc8922a, 0.8);
+      g.beginPath(); g.moveTo(cx + 18, cy); g.lineTo(cx + 18, cy - 14); g.strokePath();
+      g.beginPath(); g.moveTo(cx + 14, cy - 8); g.lineTo(cx + 14, cy - 18); g.strokePath();
+      g.beginPath(); g.moveTo(cx + 22, cy - 8); g.lineTo(cx + 22, cy - 18); g.strokePath();
+      g.fillStyle(0xc8922a, 0.4);
+      g.fillRect(cx + 12, cy - 2, 14, 8);
+      // Glow mark
+      g.fillStyle(0xffb347, 0.5);
+      g.fillCircle(cx + 18, cy - 4, 4);
+    } else if (entryId === 'vision_2') {
+      // Door with light underneath, child silhouette
+      g.fillStyle(0x5a4a30, 0.6);
+      g.fillRect(cx - 12, cy - 24, 24, 40);
+      g.fillStyle(0xf0e8d0, 0.7);
+      g.fillRect(cx - 10, cy + 12, 20, 4); // light under door
+      g.lineStyle(1, 0x3a2a1a, 0.5);
+      g.strokeRect(cx - 12, cy - 24, 24, 40);
+      // Door handle
+      g.fillStyle(0x8a6a40, 0.8);
+      g.fillCircle(cx + 8, cy - 2, 2);
+      // Child silhouette to the left
+      g.fillStyle(0x3a2a1a, 0.5);
+      g.fillCircle(cx - 24, cy - 12, 4); // head
+      g.fillRect(cx - 26, cy - 8, 4, 14); // body
+    } else if (entryId === 'vision_3') {
+      // Figure at window, back turned
+      g.lineStyle(1, 0x5a4a30, 0.5);
+      g.strokeRect(cx - 16, cy - 20, 32, 32); // window frame
+      g.fillStyle(0xd8d0b8, 0.3);
+      g.fillRect(cx - 14, cy - 18, 28, 28); // window pane
+      // Figure silhouette (back turned)
+      g.fillStyle(0x3a2a1a, 0.6);
+      g.fillCircle(cx, cy - 8, 5); // head
+      g.fillRect(cx - 5, cy - 3, 10, 16); // body
+    } else if (entryId === 'vision_4') {
+      // Three cold lights on dark road
+      g.lineStyle(1, 0x5a4a30, 0.4);
+      g.beginPath(); g.moveTo(cx - 36, cy + 8); g.lineTo(cx + 36, cy + 8); g.strokePath(); // road
+      // Three lights
+      g.fillStyle(0x88aacc, 0.6);
+      g.fillCircle(cx - 14, cy - 4, 4);
+      g.fillCircle(cx, cy - 8, 4);
+      g.fillCircle(cx + 14, cy - 4, 4);
+      // Glow halos
+      g.fillStyle(0x88aacc, 0.15);
+      g.fillCircle(cx - 14, cy - 4, 10);
+      g.fillCircle(cx, cy - 8, 10);
+      g.fillCircle(cx + 14, cy - 4, 10);
+    } else if (entryId === 'vision_5') {
+      // Musical notation fading to one line
+      g.lineStyle(1, 0x5a4a30, 0.5);
+      for (let i = 0; i < 5; i++) {
+        const a = 0.6 - i * 0.1;
+        g.lineStyle(1, 0x5a4a30, a);
+        g.beginPath(); g.moveTo(cx - 30, cy - 16 + i * 6); g.lineTo(cx + 30, cy - 16 + i * 6); g.strokePath();
+      }
+      // Notes fading
+      g.fillStyle(0x5a4a30, 0.5);
+      g.fillCircle(cx - 18, cy - 13, 2); g.fillCircle(cx - 6, cy - 7, 2);
+      g.fillCircle(cx + 8, cy - 1, 2);
+      // One strong line at bottom
+      g.lineStyle(2, 0x5a4a30, 0.9);
+      g.beginPath(); g.moveTo(cx - 30, cy + 14); g.lineTo(cx + 30, cy + 14); g.strokePath();
+      g.fillStyle(0x5a4a30, 0.9);
+      g.fillCircle(cx + 12, cy + 14, 3);
+    } else if (entryId === 'baba_revelation') {
+      // Burnt braid over candle flame
+      g.lineStyle(1, 0x5a4a30, 0.6);
+      // Braid — wavy line
+      g.beginPath();
+      g.moveTo(cx - 16, cy - 16);
+      for (let i = 0; i < 6; i++) g.lineTo(cx - 16 + i * 6, cy - 16 + (i % 2 ? 4 : -4));
+      g.strokePath();
+      // Burn darkening at end
+      g.fillStyle(0x1a0e08, 0.5);
+      g.fillCircle(cx + 14, cy - 14, 4);
+      // Candle
+      g.fillStyle(0xe8dfc0, 0.8);
+      g.fillRect(cx - 2, cy, 4, 14); // wax
+      g.fillStyle(0xffb347, 0.9);
+      g.fillTriangle(cx, cy - 6, cx - 3, cy + 2, cx + 3, cy + 2); // flame
+      g.fillStyle(0xffb347, 0.15);
+      g.fillCircle(cx, cy - 2, 10); // glow
+    } else if (entryId === 'ezra_boots') {
+      // Boot with copper wire at heel
+      g.lineStyle(1, 0x5a4a30, 0.6);
+      g.beginPath();
+      g.moveTo(cx - 10, cy - 14); g.lineTo(cx - 10, cy + 6); g.lineTo(cx + 16, cy + 6);
+      g.lineTo(cx + 16, cy + 2); g.lineTo(cx + 4, cy + 2); g.lineTo(cx + 4, cy - 14);
+      g.closePath(); g.strokePath();
+      g.fillStyle(0x3a2a1a, 0.3);
+      g.fillRect(cx - 10, cy - 14, 14, 20);
+      // Copper wire at heel
+      g.lineStyle(1, 0xc8782a, 0.9);
+      g.beginPath();
+      g.moveTo(cx - 10, cy + 2); g.lineTo(cx - 14, cy + 6); g.lineTo(cx - 10, cy + 6);
+      g.strokePath();
+    } else if (entryId === 'domovoi_watching') {
+      // Chimney smoke forming face
+      g.fillStyle(0x5a4a30, 0.5);
+      g.fillRect(cx - 4, cy + 4, 8, 18); // chimney
+      // Smoke wisps forming face
+      g.fillStyle(0x8a7a5a, 0.25);
+      g.fillCircle(cx, cy - 6, 8);
+      g.fillCircle(cx - 4, cy - 12, 6);
+      g.fillCircle(cx + 4, cy - 14, 5);
+      // Face in smoke
+      g.fillStyle(0x5a4a30, 0.35);
+      g.fillCircle(cx - 3, cy - 10, 1.5); // eye
+      g.fillCircle(cx + 3, cy - 10, 1.5); // eye
+      g.lineStyle(1, 0x5a4a30, 0.25);
+      g.beginPath(); g.moveTo(cx - 2, cy - 5); g.lineTo(cx + 2, cy - 5); g.strokePath(); // mouth
+    } else if (entryId === 'ibbur_rivka') {
+      // Two silhouettes in one body
+      g.fillStyle(0x5a4a30, 0.4);
+      g.fillCircle(cx - 4, cy - 16, 5); // head 1
+      g.fillStyle(0x5a4a30, 0.25);
+      g.fillCircle(cx + 4, cy - 16, 5); // head 2 (ghostly)
+      g.fillStyle(0x5a4a30, 0.35);
+      g.fillRect(cx - 6, cy - 11, 12, 20); // shared body
+      // Hands sorting herbs
+      g.fillStyle(0x5a7a3a, 0.4);
+      g.fillCircle(cx - 10, cy + 4, 3);
+      g.fillCircle(cx + 10, cy + 4, 3);
+      g.fillCircle(cx - 8, cy + 8, 2);
+    } else if (entryId === 'nocnica_cost') {
+      // Peripheral shadow, slightly to one side
+      g.fillStyle(0x5a4a30, 0.15);
+      g.fillCircle(cx + 20, cy - 2, 14); // shadow mass
+      g.fillStyle(0x5a4a30, 0.25);
+      g.fillCircle(cx + 22, cy - 8, 6); // head shape
+      // Watching hand — the mark
+      g.lineStyle(1, 0xc8922a, 0.5);
+      g.beginPath(); g.moveTo(cx - 10, cy + 6); g.lineTo(cx - 10, cy - 4); g.strokePath();
+      g.fillStyle(0xc8922a, 0.3);
+      g.fillCircle(cx - 10, cy, 3);
+    } else if (entryId === 'observe_idol') {
+      // Idol face, eyes open
+      g.fillStyle(0x5a4a30, 0.7);
+      g.fillRect(cx - 5, cy - 20, 10, 24); // body
+      g.fillCircle(cx, cy - 24, 6); // head
+      // Eyes open — amber
+      g.fillStyle(0xc8922a, 0.9);
+      g.fillRect(cx - 4, cy - 25, 3, 2);
+      g.fillRect(cx + 1, cy - 25, 3, 2);
+    } else if (entryId === 'observe_board') {
+      // Window with one new plank
+      g.lineStyle(1, 0x5a4a30, 0.5);
+      g.strokeRect(cx - 14, cy - 14, 28, 22);
+      // Old planks
+      g.fillStyle(0x5a4a30, 0.3);
+      g.fillRect(cx - 12, cy - 12, 24, 4);
+      g.fillRect(cx - 12, cy - 4, 24, 4);
+      g.fillRect(cx - 12, cy + 4, 24, 4);
+      // One new plank — lighter
+      g.fillStyle(0xa08860, 0.5);
+      g.fillRect(cx - 12, cy - 4, 24, 4);
+    } else if (entryId === 'observe_firefly') {
+      // Jar with one brighter dot
+      g.lineStyle(1, 0x5a4a30, 0.5);
+      g.strokeRect(cx - 8, cy - 16, 16, 26); // jar body
+      g.strokeRect(cx - 6, cy - 18, 12, 4); // jar lid
+      // Fireflies — dim
+      g.fillStyle(0xc8a848, 0.3);
+      g.fillCircle(cx - 3, cy - 6, 2);
+      g.fillCircle(cx + 4, cy + 2, 2);
+      g.fillCircle(cx - 1, cy + 6, 2);
+      // One brighter — matches mark
+      g.fillStyle(0xffb347, 0.9);
+      g.fillCircle(cx + 2, cy - 2, 2);
+      g.fillStyle(0xffb347, 0.2);
+      g.fillCircle(cx + 2, cy - 2, 6);
+    } else if (entryId === 'doc_rivka') {
+      // Regency seal, cracked
+      g.lineStyle(1, 0x5a4a30, 0.5);
+      g.strokeCircle(cx, cy - 4, 14);
+      g.strokeCircle(cx, cy - 4, 10);
+      // Seal letter
+      g.fillStyle(0x5a4a30, 0.6);
+      g.fillRect(cx - 3, cy - 10, 6, 12);
+      // Crack
+      g.lineStyle(1, 0x8a6a40, 0.7);
+      g.beginPath();
+      g.moveTo(cx - 8, cy - 14); g.lineTo(cx + 2, cy - 4); g.lineTo(cx + 10, cy + 6);
+      g.strokePath();
+    } else if (entryId === 'ritual_roads') {
+      // Five roads straightening, viewed from above
+      g.fillStyle(0x5a4a30, 0.4);
+      g.fillCircle(cx, cy, 4); // center
+      const angles = [-90, -36, 36, 108, 180];
+      for (const a of angles) {
+        const rad = a * Math.PI / 180;
+        g.lineStyle(2, 0x5a4a30, 0.6);
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(cx + Math.cos(rad) * 26, cy + Math.sin(rad) * 26);
+        g.strokePath();
+      }
+      // Thread knots at midpoints
+      g.fillStyle(0x4a5a7a, 0.7);
+      for (const a of angles) {
+        const rad = a * Math.PI / 180;
+        g.fillCircle(cx + Math.cos(rad) * 13, cy + Math.sin(rad) * 13, 2);
+      }
+    }
+
+    container.add(g);
+    this._journalRightItems.push(g);
+    return g;
+  }
+
+  _journalMoveSelection(dir) {
+    if (!this._journalEntries.length) return;
+    this._journalSelection = Math.max(0, Math.min(this._journalEntries.length - 1,
+      this._journalSelection + dir));
+    // Adjust scroll
+    const max = this._journalMaxVisible;
+    if (this._journalSelection < this._journalScrollOffset) {
+      this._journalScrollOffset = this._journalSelection;
+    } else if (this._journalSelection >= this._journalScrollOffset + max) {
+      this._journalScrollOffset = this._journalSelection - max + 1;
+    }
+    this._journalRefresh();
+  }
+
+  _journalSelectEntry() {
+    const entries = this._journalEntries;
+    if (!entries.length) return;
+    const id = entries[this._journalSelection];
+    if (!id) return;
+    // Mark as read
+    const idx = gameState.journal.unread.indexOf(id);
+    if (idx >= 0) gameState.journal.unread.splice(idx, 1);
+    gameState.journal.selectedEntry = id;
+    this._journalRefresh();
+  }
+
+  _journalRefresh() {
+    const c = this._journalContainer;
+    if (!c) return;
+    this._buildJournalList(c);
+    this._buildJournalRight(c);
+  }
+
   closeDialogue() {
     this.dialogueActive = false;
     this.choiceActive = false;
@@ -6281,6 +6992,8 @@ class GameScene extends Phaser.Scene {
         closingText.destroy();
         scene.visionActive = false;
         if (typeof music !== 'undefined') music.stopVision();
+        // Journal entry for this vision (index 0-4 → vision_1 through vision_5)
+        try { addJournalEntry('vision_' + (index + 1)); } catch (e) {}
 
         // Increase hand glow
         if (index !== 4) scene.handGlowLevel = index + 1; // vision 5 handles its own
@@ -6297,6 +7010,7 @@ class GameScene extends Phaser.Scene {
             setTimeout(() => {
               gameState.questComplete = true;
               try { sfx.play('quest_complete'); } catch (e) {}
+              try { addJournalEntry('ritual_roads'); } catch (e) {}
               scene.triggerPoludnica();
             }, 2200);
           }, 1500);
@@ -7908,6 +8622,7 @@ class GameScene extends Phaser.Scene {
         onClose: () => {
           ez.codexShown = true;
           ez.sceneShown = '7';
+          try { addJournalEntry('ezra_boots'); } catch (e) {}
           this.showCodexToEzra(); // +1 attention
         },
       };
@@ -7991,7 +8706,9 @@ class GameScene extends Phaser.Scene {
           gameState.inventory.push('cure_codex_fragment_1');
           gameState.inventory.push('glass_charm');
           try { sfx.play('codex_reveal'); } catch (e) {}
-          gameState.codexFragmentCollected = true; try { saveGame(); } catch (e) {}
+          gameState.codexFragmentCollected = true;
+          try { addJournalEntry('baba_revelation'); } catch (e) {}
+          try { saveGame(); } catch (e) {}
           this.showItemNotification('Received: Cure Codex Fragment · Glass Charm');
           // Advance to Act 2 after this conversation
           gameState.act = 2;
@@ -8221,6 +8938,7 @@ class GameScene extends Phaser.Scene {
         requires: () => gameState.domovoiState.sceneShown === 2 || gameState.domovoiState.sceneShown >= 2,
         onPickup: () => {
           gameState.domovoiState.signpostFragmentFound = true;
+          try { addJournalEntry('doc_rivka'); } catch (e) {}
           gameState.memoryFragments = gameState.memoryFragments || [];
           if (!gameState.memoryFragments.includes('signpost'))
             gameState.memoryFragments.push('signpost');
@@ -8485,6 +9203,7 @@ class GameScene extends Phaser.Scene {
         if (this._nocnicaTimer >= 8000 && !this._nocnicaTriggered) {
           this._nocnicaTriggered = true;
           gameState.ritualState.nocnica_found = true;
+          try { addJournalEntry('nocnica_cost'); } catch (e) {}
           if (!gameState.regencyFired.nocnica_found) {
             gameState.regencyFired.nocnica_found = true;
             adjustAttention(-3, 'nocnica_found');
@@ -8713,6 +9432,7 @@ class GameScene extends Phaser.Scene {
       const [a, b, c] = this._domovoiSequence;
       if (a === 'bread' && b === 'salt' && personals.includes(c)) {
         gameState.ritualState.domovoi_offering_correct = true;
+        try { addJournalEntry('domovoi_watching'); } catch (e) {}
         if (!gameState.regencyFired.domovoi_correct) {
           gameState.regencyFired.domovoi_correct = true;
           adjustAttention(-2, 'domovoi_correct');
@@ -9195,6 +9915,9 @@ class GameScene extends Phaser.Scene {
     }
     if (matched) {
       gameState.observedZones.push(matched.id);
+      // Map observation zone IDs to journal entries
+      const obsJournalMap = { idol: 'observe_idol', inn_window: 'observe_board', zuzka: 'observe_firefly' };
+      if (obsJournalMap[matched.id]) { try { addJournalEntry(obsJournalMap[matched.id]); } catch (e) {} }
       this._obsText.setText(matched.text);
       this._obsText.setAlpha(0);
       this.tweens.add({ targets: this._obsText, alpha: 1, duration: 800 });
@@ -10723,6 +11446,7 @@ class MainMenuScene extends Phaser.Scene {
       gameState.zuzkaMetOnce = false; gameState.firstVillageEntry = false;
       gameState.inventory = [];
       gameState.observedZones = [];
+      gameState.journal = { entries: [], unread: [], selectedEntry: null };
       gameState.ritualState = {
         perimeter_walked: false,
         domovoi_offering_correct: false,
@@ -10735,8 +11459,168 @@ class MainMenuScene extends Phaser.Scene {
       gameState.regencyFired = {};
       gameState.brelSceneFired = false;
       gameState.gameHour = 8.0;
-      this.scene.start('OpeningScene');
+      this._showTutorialCard(() => this.scene.start('OpeningScene'));
     });
+  }
+
+  // ── Traveller's Guide tutorial card ────────────────────────────
+  _showTutorialCard(onDone) {
+    const cam = this.cameras.main;
+    const W = cam.width, H = cam.height;
+    // Restore camera from the black fade-out
+    cam.fadeIn(600, 0, 0, 0);
+
+    const PANEL_W = 620, PANEL_H = 560;
+    const px = Math.round((W - PANEL_W) / 2);
+    const py = Math.round((H - PANEL_H) / 2);
+    const cx = Math.round(W / 2);
+
+    const container = this.add.container(0, 0);
+    container.setAlpha(0);
+    container.setDepth(10000);
+
+    // Dim backdrop
+    const dim = this.add.graphics();
+    dim.fillStyle(0x000000, 0.75);
+    dim.fillRect(0, 0, W, H);
+    container.add(dim);
+
+    // Parchment panel — same aesthetic as dialogue boxes
+    const panel = this.add.graphics();
+    // Outer shadow
+    panel.fillStyle(0x000000, 0.55);
+    panel.fillRoundedRect(px + 4, py + 5, PANEL_W, PANEL_H, 10);
+    // Dark backing
+    panel.fillStyle(0x1a0e08, 0.96);
+    panel.fillRoundedRect(px, py, PANEL_W, PANEL_H, 10);
+    // Parchment body
+    panel.fillStyle(0x2a1b10, 0.98);
+    panel.fillRoundedRect(px + 4, py + 4, PANEL_W - 8, PANEL_H - 8, 8);
+    // Inner border
+    panel.lineStyle(2, 0x8a6a3a, 0.9);
+    panel.strokeRoundedRect(px + 8, py + 8, PANEL_W - 16, PANEL_H - 16, 6);
+    panel.lineStyle(1, 0x5a4020, 0.6);
+    panel.strokeRoundedRect(px + 12, py + 12, PANEL_W - 24, PANEL_H - 24, 4);
+    container.add(panel);
+
+    // Folk-art diamond rule helper
+    const drawDiamondRule = (y) => {
+      const g = this.add.graphics();
+      const ruleW = PANEL_W - 120;
+      const left = cx - ruleW / 2;
+      const right = cx + ruleW / 2;
+      g.lineStyle(1, 0x8a6a3a, 0.75);
+      g.beginPath(); g.moveTo(left, y); g.lineTo(cx - 10, y); g.strokePath();
+      g.beginPath(); g.moveTo(cx + 10, y); g.lineTo(right, y); g.strokePath();
+      g.fillStyle(0xc8922a, 1);
+      g.fillTriangle(cx, y - 5, cx + 5, y, cx, y + 5);
+      g.fillTriangle(cx, y - 5, cx - 5, y, cx, y + 5);
+      container.add(g);
+    };
+
+    // Title
+    const title = this.add.text(cx, py + 40, 'A  G U I D E   F O R   T H E   T R A V E L L E R', {
+      fontFamily: 'Georgia, serif', fontSize: '15px', color: '#c8922a',
+      fontStyle: 'normal', letterSpacing: 2,
+    }).setOrigin(0.5, 0.5);
+    title.setResolution(window.devicePixelRatio || 1);
+    container.add(title);
+
+    drawDiamondRule(py + 68);
+
+    // Controls — monospace key labels, serif descriptions
+    const controls = [
+      ['Arrow keys', 'Move your character'],
+      ['E',          'Talk · Interact · Advance dialogue'],
+      ['1  2  3',    'Choose a dialogue response'],
+      ['O  (hold)',  'Observe your surroundings carefully'],
+      ['ESC',        'Pause · Return to menu'],
+      ['J',          'Open the Memory Journal'],
+      ['M',          'Mute music'],
+    ];
+    const ctrlY = py + 92;
+    const keyX = px + 70;
+    const descX = px + 230;
+    controls.forEach((row, i) => {
+      const y = ctrlY + i * 26;
+      const k = this.add.text(keyX, y, row[0], {
+        fontFamily: 'Menlo, Monaco, Courier New, monospace',
+        fontSize: '13px', color: '#e8d4a8',
+      }).setOrigin(0, 0.5);
+      k.setResolution(window.devicePixelRatio || 1);
+      container.add(k);
+      const d = this.add.text(descX, y, row[1], {
+        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#ddccaa',
+      }).setOrigin(0, 0.5);
+      d.setResolution(window.devicePixelRatio || 1);
+      container.add(d);
+    });
+
+    drawDiamondRule(ctrlY + controls.length * 26 + 10);
+
+    // Tips — italic, smaller
+    const tips = [
+      'The game saves automatically.',
+      'Pay attention to the time of day.',
+      'The old folk customs are not decoration.',
+      'Standing still is sometimes the right move.',
+    ];
+    const tipsY = ctrlY + controls.length * 26 + 32;
+    tips.forEach((line, i) => {
+      const t = this.add.text(cx, tipsY + i * 22, line, {
+        fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic',
+        color: '#c8b898',
+      }).setOrigin(0.5, 0.5);
+      t.setResolution(window.devicePixelRatio || 1);
+      container.add(t);
+    });
+
+    drawDiamondRule(tipsY + tips.length * 22 + 10);
+
+    // Bottom line — poetic italic
+    const bottom = this.add.text(cx, tipsY + tips.length * 22 + 32,
+      '"The roads remember. So should you."', {
+        fontFamily: 'Georgia, serif', fontSize: '14px', fontStyle: 'italic',
+        color: '#c8922a',
+    }).setOrigin(0.5, 0.5);
+    bottom.setResolution(window.devicePixelRatio || 1);
+    container.add(bottom);
+
+    // Dismiss prompt
+    const prompt = this.add.text(cx, py + PANEL_H - 28,
+      '[E] or [Space] to begin', {
+        fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic',
+        color: '#a89878',
+    }).setOrigin(0.5, 0.5);
+    prompt.setResolution(window.devicePixelRatio || 1);
+    container.add(prompt);
+
+    // Fade in over 1s
+    this.tweens.add({ targets: container, alpha: 1, duration: 1000, ease: 'Sine.easeOut' });
+
+    // Gentle pulse on the prompt
+    this.tweens.add({
+      targets: prompt, alpha: 0.55, duration: 900,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+
+    // Dismiss handler
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      this.input.keyboard.off('keydown-E', dismiss);
+      this.input.keyboard.off('keydown-SPACE', dismiss);
+      this.tweens.add({
+        targets: container, alpha: 0, duration: 1000, ease: 'Sine.easeIn',
+        onComplete: () => {
+          container.destroy();
+          if (onDone) onDone();
+        },
+      });
+    };
+    this.input.keyboard.on('keydown-E', dismiss);
+    this.input.keyboard.on('keydown-SPACE', dismiss);
   }
 
   _continueGame() {
@@ -10940,6 +11824,7 @@ const config = {
   scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
 };
 const game = new Phaser.Game(config);
+window.game = game; // exposed for debugging/testing
 window._game = game; // debug access
 // Phaser's Scale.RESIZE handles resizing — no manual listener needed.
 </script>
