@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wyrdów</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230e0e14'/%3E%3Cpath d='M16 5 L25 16 L16 27 L7 16 Z' fill='%23c8922a'/%3E%3Cpath d='M16 10 L21 16 L16 22 L11 16 Z' fill='%230e0e14'/%3E%3C/svg%3E">
+<meta name="description" content="Wyrdów — a folk-fantasy adventure at the crossroads. Five roads, one idol, and a cure the world was made to forget.">
+<meta property="og:title" content="Wyrdów">
+<meta property="og:description" content="A folk-fantasy adventure at the crossroads. Five roads, one idol, and a cure the world was made to forget.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/assets/images/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -371,6 +378,11 @@ function addJournalEntry(entryId) {
     gameState.journal.entries.push(entryId);
     gameState.journal.unread.push(entryId);
     try { saveGame(); } catch (e) {}
+    // Quiet toast so the player knows the journal has something new
+    try {
+      const gs = game.scene.getScene('GameScene');
+      if (gs && gs.scene.isActive() && gs._showJournalToast) gs._showJournalToast();
+    } catch (e) {}
   }
 }
 
@@ -1855,7 +1867,17 @@ class GameScene extends Phaser.Scene {
     this.sortObjects();
 
     // Controls
-    this.cursors = this.input.keyboard.createCursorKeys();
+    // Arrow keys + WASD both drive movement. Wrap the two key sets in
+    // a small proxy so every existing `cursors.X.isDown` check hears both.
+    const arrowKeys = this.input.keyboard.createCursorKeys();
+    const wasdKeys = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
+    const eitherKey = (a, b) => ({ get isDown() { return a.isDown || b.isDown; } });
+    this.cursors = {
+      up:    eitherKey(arrowKeys.up,    wasdKeys.up),
+      down:  eitherKey(arrowKeys.down,  wasdKeys.down),
+      left:  eitherKey(arrowKeys.left,  wasdKeys.left),
+      right: eitherKey(arrowKeys.right, wasdKeys.right),
+    };
     this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.observeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.setupObservationZones();
@@ -1868,8 +1890,13 @@ class GameScene extends Phaser.Scene {
     ];
     this.moveSpeed = 0.03;
     this.playerFacing = 'se'; // current facing direction
-    // ESC opens the in-game pause menu (Resume / Return to Menu)
-    this.input.keyboard.on('keydown-ESC', () => this.togglePauseMenu());
+    // ESC opens the in-game pause menu (Resume / Return to Menu).
+    // If the journal is open, ESC closes it instead.
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this._pauseSettingsOpen) return; // settings overlay closes itself
+      if (this._journalOpen) { this._closeJournal(); return; }
+      this.togglePauseMenu();
+    });
     // J toggles the Memory Journal
     this.input.keyboard.on('keydown-J', () => this.toggleJournal());
     this._journalOpen = false;
@@ -1917,9 +1944,13 @@ class GameScene extends Phaser.Scene {
       fontSize: '14px', color: '#6a5a40',
       stroke: '#0e0e14', strokeThickness: 3,
     }).setScrollFactor(0).setDepth(1000);
-    this.add.text(16, 74, 'Arrows to move  ·  E to talk', {
+    const controlsHint = this.add.text(16, 74, 'Arrows / WASD to move  ·  E to talk  ·  J journal', {
       fontFamily: 'monospace', fontSize: '11px', color: '#555',
     }).setScrollFactor(0).setDepth(1000);
+    // Fade the hint out once the player has had time to read it
+    this.time.delayedCall(20000, () => {
+      this.tweens.add({ targets: controlsHint, alpha: 0, duration: 2000 });
+    });
 
     // Interact prompt (floating above NPC)
     this.interactPrompt = this.add.text(0, 0, '', {
@@ -5897,8 +5928,8 @@ class GameScene extends Phaser.Scene {
     const W = cam.width, H = cam.height;
     const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.6).setOrigin(0, 0);
-    // Taller panel to fit three comfortably-spaced options
-    const pw = 360, ph = 260;
+    // Taller panel to fit four comfortably-spaced options
+    const pw = 360, ph = 300;
     const px = (W - pw) / 2, py = (H - ph) / 2;
     const panel = this.add.graphics();
     panel.fillStyle(0x1a1410, 0.96); panel.fillRoundedRect(px, py, pw, ph, 6);
@@ -5918,17 +5949,18 @@ class GameScene extends Phaser.Scene {
       return t;
     };
     const resume    = makeOpt('Resume',         py + 86,  () => this._closePauseMenu());
-    const ret       = makeOpt('Return to Menu', py + 128, () => this._returnToMenu());
-    const closeGame = makeOpt('Close Game',     py + 170, () => this._closeGame());
+    const settings  = makeOpt('Settings',       py + 128, () => this._openPauseSettings());
+    const ret       = makeOpt('Return to Menu', py + 170, () => this._returnToMenu());
+    const closeGame = makeOpt('Close Game',     py + 212, () => this._closeGame());
     const hint = this.add.text(W / 2, py + ph - 22, 'Esc to resume', {
       fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic', color: '#a89878',
     }).setOrigin(0.5);
     // Slot for the "press Alt+F4…" fallback message after Close Game
-    this._pauseCloseMsg = this.add.text(W / 2, py + 200, '', {
+    this._pauseCloseMsg = this.add.text(W / 2, py + 242, '', {
       fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic',
       color: '#c8b878', wordWrap: { width: pw - 40 }, align: 'center',
     }).setOrigin(0.5);
-    layer.add([dim, panel, title, resume, ret, closeGame, hint, this._pauseCloseMsg]);
+    layer.add([dim, panel, title, resume, settings, ret, closeGame, hint, this._pauseCloseMsg]);
     this._pauseLayer = layer;
     this.physics && this.physics.world && this.physics.world.pause && this.physics.world.pause();
   }
@@ -5966,13 +5998,116 @@ class GameScene extends Phaser.Scene {
     });
   }
 
+  // ── In-game Settings (from the pause menu) ─────────────────────────
+  // Same sliders as the main-menu overlay, drawn above the pause layer.
+  _openPauseSettings() {
+    if (this._pauseSettingsOpen) return;
+    this._pauseSettingsOpen = true;
+    const cam = this.cameras.main;
+    const W = cam.width, H = cam.height;
+    const layer = this.add.container(0, 0).setScrollFactor(0).setDepth(3100);
+    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0, 0);
+    layer.add(dim);
+    const pw = 460, ph = 320;
+    const px = (W - pw) / 2, py = (H - ph) / 2;
+    const panel = this.add.graphics();
+    panel.fillStyle(0x1a1410, 0.96); panel.fillRoundedRect(px, py, pw, ph, 6);
+    panel.lineStyle(1, 0xc8922a, 0.6); panel.strokeRoundedRect(px, py, pw, ph, 6);
+    layer.add(panel);
+    const title = this.add.text(W / 2, py + 28, 'Settings', {
+      fontFamily: 'Georgia, serif', fontSize: '24px', color: '#c8922a',
+    }).setOrigin(0.5);
+    layer.add(title);
+
+    const sliders = [
+      { label: 'Music',   key: 'musicVolume',
+        apply: (v) => { gameState.musicVolume = v; music._applyMaster(); } },
+      { label: 'Ambient', key: 'ambientVolume',
+        apply: (v) => { gameState.ambientVolume = v;
+                        music._ambientNaturalTarget = v;
+                        music._recomputeAmbient(200); } },
+      { label: 'SFX',     key: 'sfxVolume',
+        apply: (v) => { gameState.sfxVolume = v; try { sfx.applyMaster(); } catch (e) {} } },
+    ];
+    sliders.forEach((sl, idx) => {
+      const sy = py + 80 + idx * 56;
+      const lbl = this.add.text(px + 30, sy, sl.label, {
+        fontFamily: 'Georgia, serif', fontSize: '16px', color: '#e8dfc0',
+      });
+      layer.add(lbl);
+      const tx = px + 130, ty = sy + 12, tw = 280;
+      const track = this.add.graphics();
+      track.fillStyle(0x3a2a18, 1); track.fillRect(tx, ty, tw, 4);
+      layer.add(track);
+      const knob = this.add.circle(tx + tw * gameState[sl.key], ty + 2, 8, 0xc8922a)
+        .setInteractive({ draggable: true, useHandCursor: true });
+      this.input.setDraggable(knob);
+      layer.add(knob);
+      knob.on('drag', (_p, dx) => {
+        const nx = Phaser.Math.Clamp(dx, tx, tx + tw);
+        knob.x = nx;
+        const v = (nx - tx) / tw;
+        sl.apply(v);
+        saveSettings();
+      });
+    });
+
+    // Fullscreen toggle
+    const fsY = py + ph - 80;
+    const fsLabel = this.add.text(px + 30, fsY, 'Fullscreen', {
+      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#e8dfc0',
+    });
+    layer.add(fsLabel);
+    const fsBtn = this.add.text(px + pw - 100, fsY, '[ Toggle ]', {
+      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#c8922a',
+    }).setInteractive({ useHandCursor: true });
+    fsBtn.on('pointerdown', () => {
+      if (this.scale.isFullscreen) this.scale.stopFullscreen();
+      else this.scale.startFullscreen();
+    });
+    layer.add(fsBtn);
+
+    // Close
+    const close = this.add.text(W / 2, py + ph - 28, '[ Close — Esc ]', {
+      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#c8922a',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    layer.add(close);
+    const doClose = () => {
+      layer.destroy(); this._pauseSettingsOpen = false;
+      this.input.keyboard.off('keydown-ESC', doClose);
+    };
+    close.on('pointerdown', doClose);
+    this.input.keyboard.on('keydown-ESC', doClose);
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   //  MEMORY JOURNAL — open book UI
   // ═══════════════════════════════════════════════════════════════════
+  // Small parchment slip, top-right: tells the player the journal grew.
+  _showJournalToast() {
+    const cam = this.cameras.main;
+    // If a toast is already showing, let it finish — entries added in
+    // bursts (e.g. quest completion) shouldn't stack five slips.
+    if (this._journalToastActive) return;
+    this._journalToastActive = true;
+    const note = this.add.text(cam.width - 20, 96, '✦  The journal remembers · [J]', {
+      fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic',
+      color: '#c8922a', stroke: '#0e0e14', strokeThickness: 3,
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(1003).setAlpha(0);
+    this.tweens.add({
+      targets: note,
+      alpha: { from: 0, to: 1 },
+      x: { from: cam.width + 10, to: cam.width - 20 },
+      duration: 600, ease: 'Sine.easeOut',
+      hold: 3000, yoyo: true,
+      onComplete: () => { note.destroy(); this._journalToastActive = false; },
+    });
+  }
+
   toggleJournal() {
     if (this._journalOpen) { this._closeJournal(); return; }
     // Block during dialogue, vision, or pause menu
-    if (this.dialogueActive || this.visionActive || this._paused) return;
+    if (this.dialogueActive || this.visionActive || this._paused || this._pauseLayer) return;
     this._openJournal();
   }
 
@@ -6088,6 +6223,7 @@ class GameScene extends Phaser.Scene {
     // Entry list items (will be rebuilt on scroll/selection change)
     this._journalListItems = [];
     this._journalRightItems = [];
+    this._journalMarkSelectedRead();
     this._buildJournalList(container);
     this._buildJournalRight(container);
 
@@ -6216,11 +6352,32 @@ class GameScene extends Phaser.Scene {
       }).setOrigin(0, 0).setResolution(this._journalDpr);
       container.add(iconText);
       this._journalListItems.push(iconText);
-      // Title
+      // Title — truncated with an ellipsis if it would run into the spine
       const titleColor = isSelected ? '#3a2a0e' : '#5a4a30';
       const titleText = this.add.text(this._journalLeftX + 22, y + 1, def.title, {
         fontFamily: 'Georgia, serif', fontSize: '12px', color: titleColor,
       }).setOrigin(0, 0).setResolution(this._journalDpr);
+      const maxTitleW = this._journalLeftPageW - 48 - 26;
+      if (titleText.displayWidth > maxTitleW) {
+        let t = def.title;
+        while (t.length > 4 && titleText.displayWidth > maxTitleW) {
+          t = t.slice(0, -1);
+          titleText.setText(t.trimEnd() + '…');
+        }
+      }
+      // Mouse: hover selects, click opens on the right page
+      titleText.setInteractive({ useHandCursor: true });
+      const rowIndex = offset + i;
+      titleText.on('pointerover', () => {
+        if (this._journalSelection !== rowIndex) {
+          this._journalSelection = rowIndex;
+          this._journalRefresh();
+        }
+      });
+      titleText.on('pointerdown', () => {
+        this._journalSelection = rowIndex;
+        this._journalRefresh();
+      });
       container.add(titleText);
       this._journalListItems.push(titleText);
     });
@@ -6576,8 +6733,19 @@ class GameScene extends Phaser.Scene {
   _journalRefresh() {
     const c = this._journalContainer;
     if (!c) return;
+    this._journalMarkSelectedRead();
     this._buildJournalList(c);
     this._buildJournalRight(c);
+  }
+
+  // The right page shows the selected entry, so displaying it IS reading
+  // it — clear the amber unread dot for whatever is currently selected.
+  _journalMarkSelectedRead() {
+    const id = this._journalEntries && this._journalEntries[this._journalSelection];
+    if (!id) return;
+    const idx = gameState.journal.unread.indexOf(id);
+    if (idx >= 0) gameState.journal.unread.splice(idx, 1);
+    gameState.journal.selectedEntry = id;
   }
 
   closeDialogue() {
@@ -8355,6 +8523,8 @@ class GameScene extends Phaser.Scene {
   }
 
   handleMovement(delta) {
+    // Frozen while the journal or pause menu is open
+    if (this._paused || this._pauseLayer) return;
     let dx = 0, dy = 0;
     if (this.cursors.up.isDown)    { dx -= 1; dy -= 1; }
     if (this.cursors.down.isDown)  { dx += 1; dy += 1; }
@@ -11000,7 +11170,41 @@ class OpeningScene extends Phaser.Scene {
 class MainMenuScene extends Phaser.Scene {
   constructor() { super('MainMenuScene'); }
 
-  preload() { music.preload(this); sfx.preload(this); }
+  preload() {
+    // ── Loading screen — the music files are the heavy part of the
+    // first visit, so show a folk-styled progress thread while they load.
+    const W = this.cameras.main.width, H = this.cameras.main.height;
+    const cx = W / 2, cy = H / 2;
+    const barW = Math.min(W * 0.5, 420);
+    const loadTitle = this.add.text(cx, cy - 46, 'W Y R D Ó W', {
+      fontFamily: 'Georgia, serif', fontSize: '28px', color: '#c8922a',
+    }).setOrigin(0.5).setResolution(window.devicePixelRatio || 1);
+    const loadLabel = this.add.text(cx, cy + 34, 'spooling the thread…', {
+      fontFamily: 'Georgia, serif', fontSize: '13px', fontStyle: 'italic', color: '#8a7a5a',
+    }).setOrigin(0.5).setResolution(window.devicePixelRatio || 1);
+    const track = this.add.graphics();
+    track.fillStyle(0x2a1f14, 1);
+    track.fillRect(cx - barW / 2, cy - 2, barW, 4);
+    const fill = this.add.graphics();
+    const knot = this.add.graphics(); // little diamond travelling the thread
+    this.load.on('progress', (p) => {
+      fill.clear();
+      fill.fillStyle(0xc8922a, 1);
+      fill.fillRect(cx - barW / 2, cy - 2, barW * p, 4);
+      knot.clear();
+      const kx = cx - barW / 2 + barW * p;
+      knot.fillStyle(0xffd97a, 1);
+      knot.fillTriangle(kx, cy - 7, kx + 6, cy, kx, cy + 7);
+      knot.fillTriangle(kx, cy - 7, kx - 6, cy, kx, cy + 7);
+    });
+    this.load.on('complete', () => {
+      [loadTitle, loadLabel, track, fill, knot].forEach(o => {
+        this.tweens.add({ targets: o, alpha: 0, duration: 400, onComplete: () => o.destroy() });
+      });
+    });
+    music.preload(this);
+    sfx.preload(this);
+  }
 
   create() {
     music.bind(this);
@@ -11530,7 +11734,7 @@ class MainMenuScene extends Phaser.Scene {
 
     // Controls — monospace key labels, serif descriptions
     const controls = [
-      ['Arrow keys', 'Move your character'],
+      ['Arrows · WASD', 'Move your character'],
       ['E',          'Talk · Interact · Advance dialogue'],
       ['1  2  3',    'Choose a dialogue response'],
       ['O  (hold)',  'Observe your surroundings carefully'],
