@@ -26,6 +26,31 @@
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 </head>
 <body>
+<!-- Touch-device notice: the game is keyboard-driven, so warn phone
+     visitors gracefully instead of soft-locking them at the menu. -->
+<div id="mobile-notice" style="display:none; position:fixed; inset:0; z-index:999; background:#0e0e14; align-items:center; justify-content:center; font-family:Georgia,serif;">
+  <div style="max-width:340px; margin:0 20px; padding:36px 28px; background:#1a1410; border:1px solid rgba(200,146,42,.6); border-radius:6px; text-align:center;">
+    <div style="letter-spacing:.35em; color:#c8922a; font-size:20px; margin-bottom:6px;">WYRDÓW</div>
+    <div style="color:#8a6a40; font-size:11px; margin-bottom:22px;">◆ ─────── ◆</div>
+    <p style="color:#e8dfc0; font-size:15px; line-height:1.6; margin-bottom:12px;">Wyrdów is best travelled with a&nbsp;keyboard.</p>
+    <p style="color:#a89878; font-style:italic; font-size:13px; line-height:1.6; margin-bottom:26px;">Please visit on a computer — the roads are hard to walk by touch.</p>
+    <button id="mobile-continue" style="background:none; border:1px solid rgba(200,146,42,.5); border-radius:4px; color:#c8922a; font-family:Georgia,serif; font-size:13px; padding:8px 18px; cursor:pointer;">Continue anyway</button>
+  </div>
+</div>
+<script>
+// Show the notice only on touch-first devices (no fine pointer attached)
+(function () {
+  try {
+    var n = document.getElementById('mobile-notice');
+    document.getElementById('mobile-continue').addEventListener('click', function () {
+      n.style.display = 'none';
+    });
+    var coarse = window.matchMedia('(pointer: coarse)').matches;
+    var fine = window.matchMedia('(pointer: fine)').matches;
+    if (coarse && !fine) n.style.display = 'flex';
+  } catch (e) {}
+})();
+</script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
 //  WYRDÓW — The Crossroads Village (Enhanced Edition)
@@ -453,6 +478,27 @@ const JOURNAL_ENTRIES = {
     text: "The roads straightened. Not dramatically \u2014 just became more certain about where they go. Po\u0142udnica appeared at noon and looked at my hand and nodded. Baba El\u017Cbieta\u2019s bells rang on their own. I think I did something real today.",
   },
 };
+
+// Display names for inventory item ids — shown in the journal's
+// "Carried" section on the left page.
+const ITEM_NAMES = {
+  thread_knots:          'Enchanted Thread Knots',
+  cure_codex_fragment_1: 'Cure Codex Fragment',
+  glass_charm:           'Glass Charm',
+  firefly:               'Sleeping Firefly',
+  burnt_braid:           'Burnt Braid',
+  copper_wire:           'Copper Wire',
+  codex_page_burnt:      'Burnt Codex Page',
+  bread:                 'Bread',
+  salt:                  'Salt',
+  memory_fragment:       'Memory Fragment',
+};
+function itemDisplayName(id) {
+  if (ITEM_NAMES[id]) return ITEM_NAMES[id];
+  // Fallback: prettify the raw id
+  return String(id).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 gameState.hasSave = hasSavedGame();
 window.saveGame = saveGame;
 window.loadGame = loadGame;
@@ -1108,15 +1154,9 @@ class MusicManager {
     for (const f of files) {
       try { scene.load.audio(f, base + f + '.mp3'); } catch (e) {}
     }
-    // TODO: replace with brel_theme.mp3 when generated.
-    // The Wellness Officer scene falls back to procedural cold piano if absent.
-    try { scene.load.audio('brel_theme', base + 'brel_theme.mp3'); } catch (e) {}
-    // Suppress 404 console noise for the optional brel theme.
-    scene.load.on('loaderror', (file) => {
-      if (file && file.key === 'brel_theme') {
-        // Silent fallback — handled by procedural drone.
-      }
-    });
+    // NOTE: brel_theme.mp3 is not yet generated. The Wellness Officer
+    // scene uses the procedural cold-piano fallback. When the track is
+    // created, drop it in assets/music/ and add 'brel_theme' to `files`.
   }
 
   // Bind to the active scene and instantiate sound objects from cache.
@@ -1463,6 +1503,14 @@ class SfxManager {
       try {
         if (scene.cache.audio.exists(key) && !this.sounds[key]) {
           this.sounds[key] = scene.sound.add(key, { volume: 0, loop: false });
+          // Footsteps: nudge the playback rate on every loop cycle so a
+          // long walk never settles into a mechanical rhythm.
+          if (/^footsteps_/.test(key)) {
+            const snd = this.sounds[key];
+            snd.on('looped', () => {
+              try { snd.setRate(0.94 + Math.random() * 0.12); } catch (e) {}
+            });
+          }
         }
       } catch (e) {}
     }
@@ -1504,7 +1552,11 @@ class SfxManager {
       const target = this.base[key] * targetMul * this._master();
       try {
         s.setLoop(true);
-        if (!s.isPlaying) { s.setVolume(0); s.play(); }
+        if (!s.isPlaying) {
+          s.setVolume(0);
+          if (/^footsteps_/.test(key)) s.setRate(0.94 + Math.random() * 0.12);
+          s.play();
+        }
         s._sfxTargetMul = targetMul;
         this._tween(key, target, fadeMs);
       } catch (e) {}
@@ -5530,6 +5582,36 @@ class GameScene extends Phaser.Scene {
     this.skyTint.clear();
     this.skyTint.fillStyle(this._skyTintCol, this._skyTintAlpha);
     this.skyTint.fillRect(0, 0, this._skyW, this._skyH);
+
+    // ── Time-of-day indicator ─────────────────────────────────────
+    // A small folk horizon in the top-right, under the knot HUD: the sun
+    // (amber) or moon (pale crescent) travels a shallow arc. Diegetic
+    // answer to "pay attention to the time of day".
+    if (!this._todGfx) {
+      this._todGfx = this.add.graphics().setScrollFactor(0).setDepth(1002).setAlpha(0.9);
+    }
+    const todG = this._todGfx; todG.clear();
+    const tcx = this._skyW - 62, tcy = 66, trw = 30, trh = 15;
+    const hr = gameState.gameHour;
+    const isDay = hr >= 6 && hr < 18;
+    const frac = isDay ? (hr - 6) / 12 : ((hr >= 18 ? hr - 18 : hr + 6) / 12);
+    const ang = Math.PI * (1 - frac);
+    const bx = tcx + Math.cos(ang) * trw;
+    const by = tcy - Math.sin(ang) * trh;
+    // Horizon line with a small centre diamond
+    todG.lineStyle(1, 0x8a7a5a, 0.45);
+    todG.beginPath(); todG.moveTo(tcx - trw - 4, tcy); todG.lineTo(tcx - 4, tcy); todG.strokePath();
+    todG.beginPath(); todG.moveTo(tcx + 4, tcy); todG.lineTo(tcx + trw + 4, tcy); todG.strokePath();
+    todG.fillStyle(0x8a7a5a, 0.55);
+    todG.fillTriangle(tcx, tcy - 3, tcx + 3, tcy, tcx, tcy + 3);
+    todG.fillTriangle(tcx, tcy - 3, tcx - 3, tcy, tcx, tcy + 3);
+    if (isDay) {
+      todG.fillStyle(0xffc84a, 0.22); todG.fillCircle(bx, by, 7);
+      todG.fillStyle(0xffc84a, 1);    todG.fillCircle(bx, by, 3.5);
+    } else {
+      todG.fillStyle(0xcfd6e8, 0.9);  todG.fillCircle(bx, by, 3.5);
+      todG.fillStyle(0x14141e, 0.9);  todG.fillCircle(bx + 1.6, by - 1.1, 2.6);
+    }
   }
 
   getSkyTintForHour(hour) {
@@ -6202,7 +6284,7 @@ class GameScene extends Phaser.Scene {
     // ── Entry list ──
     const entries = (gameState.journal.entries || []).filter(id => JOURNAL_ENTRIES[id]);
     const listTop = lpy + 42;
-    const listH = PAGE_H - 90;
+    const listH = PAGE_H - 190; // bottom of page reserved for the Carried section
     const ROW_H = 28;
     const MAX_VISIBLE = Math.min(Math.floor(listH / ROW_H), 14);
     this._journalEntries = entries;
@@ -6226,6 +6308,7 @@ class GameScene extends Phaser.Scene {
     this._journalMarkSelectedRead();
     this._buildJournalList(container);
     this._buildJournalRight(container);
+    this._buildJournalCarried(container);
 
     // Page number bottom-left
     const pageNum = this.add.text(LEFT_X + PAGE_W / 2, PAGE_Y + PAGE_H - 14, 'I.', {
@@ -6702,6 +6785,45 @@ class GameScene extends Phaser.Scene {
     container.add(g);
     this._journalRightItems.push(g);
     return g;
+  }
+
+  // ── "Carried" — the player's possessions, bottom of the left page ──
+  _buildJournalCarried(container) {
+    const dpr = this._journalDpr;
+    const cx = this._journalLeftPageCX;
+    const y0 = this._journalPageY + this._journalPageH - 130;
+    this._journalDrawRule(container, cx, y0, this._journalLeftPageW - 140);
+    const hdr = this.add.text(cx, y0 + 16, 'C A R R I E D', {
+      fontFamily: 'Georgia, serif', fontSize: '10px', color: '#8a6a40',
+    }).setOrigin(0.5, 0.5).setResolution(dpr);
+    container.add(hdr);
+
+    const inv = [...new Set(gameState.inventory || [])];
+    if (!inv.length) {
+      const none = this.add.text(cx, y0 + 38, 'Nothing but the mark on your hand.', {
+        fontFamily: 'Georgia, serif', fontSize: '11px', fontStyle: 'italic', color: '#a09070',
+      }).setOrigin(0.5, 0).setResolution(dpr);
+      container.add(none);
+      return;
+    }
+    // Two columns, up to 4 rows (8 items); overflow noted quietly
+    const colW = (this._journalLeftPageW - 80) / 2;
+    const shown = inv.slice(0, 8);
+    shown.forEach((id, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const t = this.add.text(
+        this._journalLeftX + 8 + col * colW, y0 + 32 + row * 17,
+        '· ' + itemDisplayName(id), {
+          fontFamily: 'Georgia, serif', fontSize: '11px', color: '#5a4a30',
+      }).setOrigin(0, 0).setResolution(dpr);
+      container.add(t);
+    });
+    if (inv.length > 8) {
+      const more = this.add.text(cx, y0 + 32 + 4 * 17, '…and ' + (inv.length - 8) + ' more', {
+        fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#a09070',
+      }).setOrigin(0.5, 0).setResolution(dpr);
+      container.add(more);
+    }
   }
 
   _journalMoveSelection(dir) {
