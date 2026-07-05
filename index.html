@@ -2421,7 +2421,10 @@ class GameScene extends Phaser.Scene {
     const dy = doorIso.y + this.worldOffset.y;
 
     const g = this.add.graphics();
-    g.setDepth(460);
+    // Depth-sorted with the world so players standing at the doorstep
+    // render in front of the planks (a fixed depth painted over them)
+    g._sortY = dy - 4;
+    this.objectLayer.add(g);
     // Darker wash over the Elder house footprint — two tiles (7,9) and (6,9)
     // just lightly dims the near side.
     // ── Nailed-shut door: two crossed planks ─────────────
@@ -4540,37 +4543,63 @@ class GameScene extends Phaser.Scene {
   createBackgroundVillagers() {
     this.bgVillagers = [];
 
+    // Shared villager body at hero fidelity: waisted torso with light and
+    // shade, linen collar, rope belt, jaw shading, hair fringe, catchlit
+    // eyes — the same pixel language as the named NPCs.
     const makeBody = (skin, shirt, pants, hat) => {
       const c = this.add.container(0, 0);
       const g = this.add.graphics();
+      const shade = (col, f) => {
+        const r = Math.max(0, Math.min(255, Math.round(((col >> 16) & 0xff) * f)));
+        const gr = Math.max(0, Math.min(255, Math.round(((col >> 8) & 0xff) * f)));
+        const b = Math.max(0, Math.min(255, Math.round((col & 0xff) * f)));
+        return (r << 16) | (gr << 8) | b;
+      };
+      const px = (x, y, w, h, color, a = 1) => { g.fillStyle(color, a); g.fillRect(x, y, w, h); };
       // shadow
-      g.fillStyle(0x000000, 0.25); g.fillEllipse(0, 4, 12, 4);
-      // legs
-      g.fillStyle(pants, 1);
-      g.fillRect(-3, -1, 2, 8); g.fillRect(1, -1, 2, 8);
-      // boots
-      g.fillStyle(0x1a120a, 1);
-      g.fillRect(-3, 6, 3, 2); g.fillRect(1, 6, 3, 2);
-      // torso
-      g.fillStyle(shirt, 1);
-      g.fillRect(-4, -12, 9, 12);
-      // arms
-      g.fillStyle(shirt, 1);
-      g.fillRect(-5, -11, 2, 8); g.fillRect(4, -11, 2, 8);
+      g.fillStyle(0x000000, 0.25); g.fillEllipse(0, 5, 13, 4);
+      // legs with inner shading
+      px(-3, -1, 2, 8, pants); px(1, -1, 2, 8, pants);
+      px(-2, -1, 1, 8, shade(pants, 0.75)); px(2, -1, 1, 8, shade(pants, 0.75));
+      // boots with a worn highlight
+      px(-3, 6, 3, 2, 0x1a120a); px(1, 6, 3, 2, 0x1a120a);
+      px(-3, 6, 3, 1, 0x2c2014, 0.8); px(1, 6, 3, 1, 0x2c2014, 0.8);
+      // torso — waisted, lit from the left
+      px(-4, -13, 9, 13, shirt);
+      px(-4, -13, 1, 12, shade(shirt, 1.25));
+      px(4, -12, 1, 12, shade(shirt, 0.72));
+      px(-4, -1, 9, 1, shade(shirt, 0.72));
+      // rope belt
+      px(-4, -5, 9, 1, 0x8a6a3a);
+      px(-1, -5, 1, 1, 0xa8834a);
+      // linen collar
+      px(-2, -13, 5, 1, 0xd0c09a);
+      px(-1, -12, 3, 1, 0xb0a07e, 0.8);
+      // arms with cuff and shading
+      px(-6, -12, 2, 8, shirt); px(4, -12, 2, 8, shirt);
+      px(-6, -12, 1, 8, shade(shirt, 1.2)); px(5, -12, 1, 8, shade(shirt, 0.72));
+      px(-6, -5, 2, 1, 0xd0c09a, 0.7); px(4, -5, 2, 1, 0xd0c09a, 0.7);
       // hands
-      g.fillStyle(skin, 1);
-      g.fillRect(-5, -3, 2, 1); g.fillRect(4, -3, 2, 1);
-      // head
-      g.fillStyle(skin, 1); g.fillCircle(0, -16, 4);
-      // hat
+      px(-6, -4, 2, 2, skin); px(4, -4, 2, 2, skin);
+      // head — squared, with jaw shading
+      px(-4, -21, 8, 7, skin);
+      px(-4, -21, 8, 1, shade(skin, 0.8));
+      px(-4, -15, 8, 1, shade(skin, 0.82));
+      px(3, -20, 1, 5, shade(skin, 1.12));   // cheek light
+      // hair fringe under the hat line (or bare crown)
       if (hat != null) {
-        g.fillStyle(hat, 1);
-        g.fillRect(-4, -20, 9, 2);
-        g.fillRect(-5, -18, 11, 1);
+        px(-4, -24, 9, 3, hat);
+        px(-3, -25, 7, 1, shade(hat, 1.25)); // crown light
+        px(-5, -22, 11, 1, shade(hat, 1.15)); // brim
+        px(-4, -21, 8, 1, 0x2a2018, 0.6);    // hair shadow under brim
+      } else {
+        px(-4, -23, 8, 3, 0x3a2c1c);
+        px(-4, -23, 8, 1, 0x4a3a26);
       }
-      // eyes
-      g.fillStyle(0x1a1a20, 1);
-      g.fillRect(-2, -16, 1, 1); g.fillRect(1, -16, 1, 1);
+      // eyes with catchlights + a quiet mouth
+      px(-2, -19, 1, 2, 0x1a1a20); px(1, -19, 1, 2, 0x1a1a20);
+      px(-2, -19, 1, 1, 0xd8d0b8, 0.7); px(1, -19, 1, 1, 0xd8d0b8, 0.7);
+      px(-1, -16, 2, 1, shade(skin, 0.7));
       c.add(g);
       c.bodyGfx = g;
       return c;
@@ -4883,7 +4912,10 @@ class GameScene extends Phaser.Scene {
     shed.fillRect(mx - 4,  my - 34, 2, 1);
     shed.fillRect(mx + 2,  my - 34, 2, 1);
     shed.fillRect(mx + 8,  my - 34, 2, 1);
-    shed.setDepth(440);
+    // objectLayer + _sortY so it depth-sorts behind Marta instead of
+    // painting over her head (fixed scene depths float above everything)
+    shed._sortY = my - 6;
+    this.objectLayer.add(shed);
 
     // Low sorting table to her right
     const table = this.add.graphics();
@@ -4899,7 +4931,8 @@ class GameScene extends Phaser.Scene {
     table.fillStyle(0xc8a468, 1);
     table.fillRect(mx + 9, my - 6, 4, 1);
     table.fillRect(mx + 14, my - 6, 4, 1);
-    table.setDepth(460);
+    table._sortY = my + 4;
+    this.objectLayer.add(table);
 
     const container = this.add.container(mx, my);
     const g = this.add.graphics();
@@ -4913,95 +4946,127 @@ class GameScene extends Phaser.Scene {
     this.drawMartaFrame('marta', 0);
   }
 
+  // Hero-fidelity rebuild. Daytime Marta: russet dress, orange-red
+  // headscarf, hands sorting herbs — one arm rises with the breath.
+  // Dawn/dusk Ibbur: the same body re-tinted to bruised silver, utterly
+  // still, palms upturned, half-closed eyes lit faintly from inside,
+  // with a shimmer of pale motes around the head.
   drawMartaFrame(persona, breath) {
     const g = this.martaGfx;
+    if (!g) return;
     g.clear();
+    const ib = persona === 'ibbur';
+    // Palettes — russet + orange-red / bruised violet + silver
+    const skirt   = ib ? 0x2a2036 : 0x6e3a22, skirtHi = ib ? 0x3a2e48 : 0x82462a;
+    const skirtLo = ib ? 0x201828 : 0x582e1a;
+    const apron   = ib ? 0x9a8aa8 : 0xd0c09a, apronLo = ib ? 0x7a6e8a : 0xb0a07e;
+    const bodice  = ib ? 0x1a1422 : 0x4a2416, bodiceHi = ib ? 0x2a2234 : 0x5c2e1c;
+    const yoke    = ib ? 0x8a8aa0 : 0xb03818, yokeHi  = ib ? 0xaaaac0 : 0xd04a20;
+    const scarf   = ib ? 0x6a6080 : 0xc05a20, scarfHi = ib ? 0x8a80a0 : 0xd86a28;
+    const scarfLo = ib ? 0x4a4060 : 0xa04818;
+    const skin    = ib ? 0xb89a8a : 0xc4845a, skinLo = ib ? 0x9a8074 : 0xac744e;
+    const herb    = 0x4a5a26, herbHi = 0x5e7032, herbDry = 0xc8a468;
+    const grey    = 0x9a8a78;
+    const px = (x, y, w, h, color, a = 1) => { g.fillStyle(color, a); g.fillRect(x, y, w, h); };
+    const b = ib ? 0 : breath; // the Ibbur does not breathe visibly
+
     // Shadow
     g.fillStyle(0x000000, 0.28);
-    g.fillEllipse(0, 4, 18, 5);
-    // Sitting legs in long skirt
-    g.fillStyle(persona === 'ibbur' ? 0x2a2030 : 0x3a2820, 1);
-    g.fillRect(-7, -2, 14, 8);
-    // Skirt hem trim
-    g.fillStyle(persona === 'ibbur' ? 0x4a3a5a : 0x6a4828, 1);
-    g.fillRect(-7, 5, 14, 1);
-    // Apron — dyed linen
-    g.fillStyle(persona === 'ibbur' ? 0x9a8aa8 : 0xc8b88c, 1);
-    g.fillRect(-5, -10, 10, 10);
-    // Bodice — dark wool
-    g.fillStyle(persona === 'ibbur' ? 0x1a1422 : 0x4a2818, 1);
-    g.fillRect(-6, -16, 12, 8);
-    // Embroidered yoke (red as Marta, faded silver as Ibbur)
-    g.fillStyle(persona === 'ibbur' ? 0x8a8aa0 : 0x8b2020, 1);
-    g.fillRect(-6, -16, 12, 1);
-    g.fillRect(-6, -14, 1, 1);
-    g.fillRect(-3, -14, 1, 1);
-    g.fillRect(0,  -14, 1, 1);
-    g.fillRect(3,  -14, 1, 1);
-    g.fillRect(5,  -14, 1, 1);
+    g.fillEllipse(0, 5, 20, 6);
+
+    // Long seated skirt — folds fall to the ground
+    px(-8, -4, 16, 9, skirt);
+    px(-9, 3, 18, 3, skirt);
+    px(-8, -4, 16, 1, skirtHi);
+    px(-9, 5, 18, 1, skirtLo);
+    // Fold lines
+    px(-4, -2, 1, 7, skirtLo, 0.7); px(2, -2, 1, 7, skirtLo, 0.7);
+
+    // Linen apron over the lap — herb-stained
+    px(-6, -11, 12, 10, apron);
+    px(-6, -2, 12, 1, apronLo);
+    px(-2, -8, 2, 2, herb, 0.25);            // green stain
+    px(3, -5, 1, 1, herbDry, 0.4);           // dried fleck
+    // Lap cloth with sorted herbs (Marta only — the Ibbur sits empty-handed)
+    if (!ib) {
+      px(-5, -7, 4, 1, herbHi);
+      px(-4, -6, 2, 1, herb);
+      px(1, -7, 3, 1, herbDry);
+    }
+
+    // Bodice — dark wool, laced front
+    px(-7, -18, 14, 8, bodice);
+    px(-7, -18, 14, 1, bodiceHi);
+    // Lacing
+    px(0, -17, 1, 6, bodiceHi);
+    px(-1, -16, 1, 1, yoke); px(1, -15, 1, 1, yoke); px(-1, -13, 1, 1, yoke);
+    // Embroidered yoke band
+    px(-7, -18, 14, 1, yoke);
+    for (let i = -6; i <= 6; i += 3) px(i, -16, 1, 1, i % 2 ? yoke : yokeHi);
 
     // Arms
-    g.fillStyle(persona === 'ibbur' ? 0x1a1422 : 0x4a2818, 1);
-    if (persona === 'ibbur') {
-      // Palms upturned on knees — arms forward
-      g.fillRect(-7, -14, 2, 9);
-      g.fillRect(5,  -14, 2, 9);
+    if (ib) {
+      // Palms upturned on the knees — perfectly symmetric, perfectly still
+      px(-8, -16, 3, 8, bodice);
+      px(5, -16, 3, 8, bodice);
+      px(-8, -8, 3, 2, skin);
+      px(5, -8, 3, 2, skin);
+      px(-7, -7, 2, 1, skinLo);              // upturned palm shading
+      px(6, -7, 2, 1, skinLo);
     } else {
-      // Working arms — one resting, one lifted as if sorting
-      g.fillRect(-7, -14, 2, 8);
-      g.fillRect(5,  -15 + breath, 2, 7);
-    }
-    // Hands
-    g.fillStyle(0xc4845a, 1);
-    if (persona === 'ibbur') {
-      g.fillRect(-7, -5, 2, 2);
-      g.fillRect(5,  -5, 2, 2);
-    } else {
-      g.fillRect(-7, -6, 2, 2);
-      g.fillRect(5,  -8 + breath, 2, 2);
-      // A bundle of herbs in her right hand
-      g.fillStyle(0x4a5a26, 1);
-      g.fillRect(7, -9 + breath, 3, 3);
-      g.fillStyle(0xc8a468, 1);
-      g.fillRect(7, -9 + breath, 3, 1);
+      // Working arms — left steadies the lap, right lifts with the breath
+      px(-8, -16, 3, 8, bodice);
+      px(-8, -8, 3, 2, skin);
+      px(5, -17 + b, 3, 7, bodice);
+      px(5, -10 + b, 3, 2, skin);
+      // Herb bundle in the lifted hand
+      px(7, -12 + b, 4, 3, herb);
+      px(7, -13 + b, 3, 1, herbHi);
+      px(8, -9 + b, 2, 1, herbDry);
     }
 
-    // Head — slightly tilted up for Marta, level for Ibbur
-    g.fillStyle(0xc4845a, 1);
-    g.fillCircle(0, -22, 5);
+    // Head
+    px(-4, -27, 9, 8, skin);
+    px(-4, -27, 9, 1, skinLo);
+    px(-4, -21, 9, 1, skinLo);               // jaw shade
+    // Loose strand of grey hair escaping the scarf
+    px(-5, -26, 1, 3, grey);
 
-    // Headscarf
-    g.fillStyle(persona === 'ibbur' ? 0x6a6080 : 0x8b2020, 1);
-    g.fillRect(-6, -28, 12, 5);
-    g.fillRect(-6, -26, 2, 6);
-    g.fillRect(4, -26, 2, 6);
-    // Scarf knot
-    g.fillStyle(persona === 'ibbur' ? 0x4a4060 : 0x6a1414, 1);
-    g.fillRect(4, -22, 3, 2);
+    // Headscarf — tied behind, one tail over the shoulder
+    px(-5, -30, 11, 4, scarf);
+    px(-4, -31, 9, 1, scarfHi);
+    px(-5, -27, 1, 1, scarf); px(5, -27, 1, 1, scarf);
+    // Knot + tail
+    px(5, -26, 2, 2, scarfLo);
+    px(6, -24, 2, 4, scarf);
+    px(6, -20, 1, 2, scarfLo);
 
-    // Eyes — Marta sharp and dark; Ibbur half-closed slits with faint glow
-    if (persona === 'ibbur') {
-      g.fillStyle(0x14101a, 1);
-      g.fillRect(-3, -22, 2, 1);
-      g.fillRect(1, -22, 2, 1);
-      g.fillStyle(0xffd890, 0.55);
-      g.fillRect(-3, -22, 2, 1);
-      g.fillRect(1, -22, 2, 1);
+    // Face
+    if (ib) {
+      // Half-closed slits, lit faintly from inside — someone else looking out
+      px(-3, -24, 2, 1, 0x14101a);
+      px(2, -24, 2, 1, 0x14101a);
+      px(-3, -24, 2, 1, 0xffd890, 0.6);
+      px(2, -24, 2, 1, 0xffd890, 0.6);
+      // Still, level mouth
+      px(-1, -21, 2, 1, 0x6a5a52);
+      // The shimmer — pale motes drifting off the borrowed body
+      g.fillStyle(0xd8d0f0, 0.5);
+      g.fillCircle(-7, -29, 1);
+      g.fillCircle(7, -26, 1);
+      g.fillCircle(-6, -18, 0.8);
+      g.fillCircle(8, -31, 0.8);
+      g.fillStyle(0xd8d0f0, 0.25);
+      g.fillCircle(0, -33, 1.2);
     } else {
-      g.fillStyle(0x14100a, 1);
-      g.fillCircle(-2, -22, 0.9);
-      g.fillCircle(2, -22, 0.9);
+      // Sharp dark eyes with catchlights — she misses nothing
+      px(-3, -25, 2, 2, 0x14100a);
+      px(2, -25, 2, 2, 0x14100a);
+      px(-2, -25, 1, 1, 0xe8d8c0);
+      px(3, -25, 1, 1, 0xe8d8c0);
+      // Slight knowing mouth
+      px(-1, -21, 3, 1, 0x8a4a34);
     }
-    // Mouth
-    g.lineStyle(1, 0x6a3a28, 0.6);
-    g.beginPath();
-    if (persona === 'ibbur') { g.moveTo(-1, -19); g.lineTo(1, -19); }
-    else { g.moveTo(-1, -19); g.lineTo(2, -19); }
-    g.strokePath();
-
-    // A loose strand of grey hair
-    g.fillStyle(0x9a8a78, 0.9);
-    g.fillRect(-5, -23, 1, 3);
   }
 
   updateMarta(time, delta) {
@@ -5189,7 +5254,8 @@ class GameScene extends Phaser.Scene {
     tree.beginPath(); tree.moveTo(dx + 4,  dy - 38); tree.lineTo(dx - 4, dy - 46); tree.strokePath();
     tree.beginPath(); tree.moveTo(dx + 6,  dy - 32); tree.lineTo(dx + 14, dy - 38); tree.strokePath();
     tree.beginPath(); tree.moveTo(dx + 4,  dy - 26); tree.lineTo(dx - 6, dy - 28); tree.strokePath();
-    tree.setDepth(440);
+    tree._sortY = dy - 8;
+    this.objectLayer.add(tree);
 
     const container = this.add.container(dx, dy);
     const g = this.add.graphics();
@@ -5206,69 +5272,96 @@ class GameScene extends Phaser.Scene {
     this.drawDziadekFrame(0);
   }
 
+  // Hero-fidelity rebuild: the old man under the dead tree. Flat cap,
+  // navy vest over an ash coat, long white beard, walking stick planted
+  // at his side, lantern breathing in the other hand. He has been
+  // standing there longer than anyone asks about.
   drawDziadekFrame(breath) {
     const g = this.dziadekGfx;
+    if (!g) return;
     g.clear();
+    const coat  = 0x4a4438, coatHi = 0x585244, coatLo = 0x2e2820;
+    const vest  = 0x2a3a52, vestHi = 0x364a66, vestLo = 0x1e2c40;
+    const cap   = 0x32302a, capHi  = 0x403c34;
+    const trous = 0x2a2418, boot   = 0x14100a;
+    const skin  = 0xb89878, skinLo = 0x9c7e62;
+    const beard = 0xe8e2d0, beardLo = 0xccc6b0;
+    const stick = 0x6a4828, stickHi = 0x7e5832;
+    const px = (x, y, w, h, color, a = 1) => { g.fillStyle(color, a); g.fillRect(x, y, w, h); };
+
     // Shadow
     g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(0, 4, 16, 5);
-    // Hunched legs in patched trousers
-    g.fillStyle(0x2a2418, 1);
-    g.fillRect(-4, -2, 3, 8);
-    g.fillRect(1, -2, 3, 8);
-    // Boot tips poking out
-    g.fillStyle(0x14100a, 1);
-    g.fillRect(-4, 5, 3, 2);
-    g.fillRect(1, 5, 3, 2);
-    // Long woollen coat — ash grey, near the floor
-    g.fillStyle(0x4a4438, 1);
-    g.fillRect(-7, -16, 14, 16);
-    // Coat hem darker
-    g.fillStyle(0x2e2820, 1);
-    g.fillRect(-7, -1, 14, 1);
-    // Belt
-    g.fillStyle(0x6a4828, 1);
-    g.fillRect(-7, -8, 14, 1);
-    // Hunched shoulders — top of coat narrower
-    g.fillStyle(0x4a4438, 1);
-    g.fillRect(-6, -19, 12, 4);
-    // Arms — one holding lantern out, one tucked
-    g.fillStyle(0x4a4438, 1);
-    g.fillRect(-7, -16, 2, 10);
-    g.fillRect(5,  -16 + breath, 2, 8);
-    // Hands
-    g.fillStyle(0xb89878, 1);
-    g.fillRect(-7, -7, 2, 2);
-    g.fillRect(5,  -9 + breath, 2, 2);
-    // Lantern hanging from his right hand
-    const ly = -6 + breath;
-    g.fillStyle(0x6a4828, 1);
-    g.fillRect(7, ly,     5, 1);   // top loop
-    g.fillStyle(0x3a2818, 1);
-    g.fillRect(7, ly + 1, 5, 6);   // frame
-    g.fillStyle(0xffd890, 0.95);
-    g.fillRect(8, ly + 2, 3, 4);   // candle glow
-    // Soft outward halo
-    g.fillStyle(0xffd890, 0.18);
-    g.fillCircle(9, ly + 4, 6);
-    g.fillStyle(0xffd890, 0.08);
-    g.fillCircle(9, ly + 4, 12);
-    // Head — slightly bowed
-    g.fillStyle(0xb89878, 1);
-    g.fillCircle(0, -22, 4.5);
-    // Long white hair / beard wreathing the face
-    g.fillStyle(0xe8e2d0, 1);
-    g.fillRect(-5, -25, 10, 3);
-    g.fillRect(-5, -22, 1, 6);
-    g.fillRect(4,  -22, 1, 6);
-    g.fillRect(-3, -19, 6, 4);   // beard
-    // Eyes — almost closed, two thin lines
-    g.fillStyle(0x2a1810, 1);
-    g.fillRect(-3, -22, 2, 1);
-    g.fillRect(1, -22, 2, 1);
-    // A tear-like glint under the right eye
-    g.fillStyle(0xc8d8e8, 0.5);
-    g.fillRect(2, -21, 1, 1);
+    g.fillEllipse(0, 5, 18, 5);
+
+    // Hunched legs in patched trousers, boot tips
+    px(-4, -2, 3, 8, trous); px(1, -2, 3, 8, trous);
+    px(-3, 2, 1, 2, 0x3a3426, 0.8);          // patch
+    px(-4, 5, 3, 2, boot); px(1, 5, 3, 2, boot);
+
+    // Long ash coat, worn to the weather
+    px(-8, -17, 16, 16, coat);
+    px(-8, -17, 16, 1, coatHi);
+    px(-8, -2, 16, 1, coatLo);
+    px(-7, -10, 1, 8, coatLo, 0.6);          // hang crease
+
+    // Navy wool vest over the coat front — buttoned once, at the top
+    px(-5, -17, 10, 9, vest);
+    px(-5, -17, 10, 1, vestHi);
+    px(-5, -9, 10, 1, vestLo);
+    px(0, -16, 1, 7, vestLo);                // vest opening
+    px(-1, -15, 1, 1, 0x9a9a8a);             // the one button he still does up
+
+    // Hunched shoulders — narrower than the coat
+    px(-7, -20, 14, 4, coat);
+    px(-7, -20, 14, 1, coatHi);
+
+    // Left arm resting on the walking stick, planted wide
+    px(-8, -17, 3, 8, coat);
+    px(-9, -9, 3, 2, skin);
+    // The stick — taller than his bent back, worn smooth at the grip
+    px(-10, -12, 2, 18, stick);
+    px(-10, -12, 1, 18, stickHi);
+    px(-11, -13, 4, 2, stick);               // crook grip
+    px(-10, 5, 2, 1, 0x4a3018);              // earth-darkened tip
+
+    // Right arm — lantern hand, rises with the slow breath
+    px(6, -17 + breath, 3, 8, coat);
+    px(6, -10 + breath, 3, 2, skin);
+
+    // Lantern
+    const ly = -7 + breath;
+    px(8, ly, 5, 1, stick);                  // top loop bar
+    px(8, ly + 1, 5, 7, 0x3a2818);           // frame
+    px(9, ly + 2, 3, 5, 0xffd890, 0.95);     // candle glow
+    px(9, ly + 2, 1, 1, 0xfff4cc);           // hot spot
+    // Halo
+    g.fillStyle(0xffd890, 0.18); g.fillCircle(10, ly + 4, 7);
+    g.fillStyle(0xffd890, 0.08); g.fillCircle(10, ly + 4, 13);
+
+    // Head — bowed under the cap
+    px(-4, -27, 9, 7, skin);
+    px(-4, -27, 9, 1, skinLo);
+    px(-4, -21, 9, 1, skinLo);
+
+    // Flat cap — low brim shading the eyes
+    px(-6, -30, 12, 3, cap);
+    px(-5, -31, 10, 1, capHi);
+    px(-6, -27, 13, 1, capHi);               // brim, tilted forward
+    px(4, -30, 2, 1, capHi, 0.6);            // crown crease
+
+    // Long white hair below the cap + full beard
+    px(-5, -26, 1, 5, beard); px(5, -26, 1, 5, beard);
+    px(-5, -25, 1, 3, beardLo, 0.8);
+    px(-3, -21, 7, 4, beard);                // beard mass
+    px(-2, -17, 5, 2, beard);                // beard length
+    px(-1, -15, 3, 1, beardLo);              // tapering end
+    px(-3, -20, 1, 2, beardLo);              // beard shading
+
+    // Eyes — almost closed, two thin lines under the brim
+    px(-3, -24, 2, 1, 0x2a1810);
+    px(2, -24, 2, 1, 0x2a1810);
+    // The tear-like glint under the right eye — never explained
+    px(3, -23, 1, 1, 0xc8d8e8, 0.55);
   }
 
   updateDziadek(time, delta) {
