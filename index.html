@@ -1649,6 +1649,9 @@ class SfxManager {
       try {
         if (s.isPlaying && !opts.overlap) s.stop();
         s.setVolume(vol);
+        // Positional pan (-1 left .. 1 right); reset when not specified so
+        // a reused sound doesn't inherit its previous position
+        if (s.setPan) s.setPan(opts.pan != null ? Phaser.Math.Clamp(opts.pan, -1, 1) : 0);
         s.setLoop(false);
         s.play();
       } catch (e) {}
@@ -2050,6 +2053,9 @@ class GameScene extends Phaser.Scene {
       this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
     ];
     this.moveSpeed = 0.03;
+    // Brisk walk — hold Shift for a hurried pace (not a run; the roads
+    // deserve respect, but the player's time deserves it too)
+    this.briskKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.playerFacing = 'se'; // current facing direction
     // ESC opens the in-game pause menu (Resume / Return to Menu).
     // If the journal is open, ESC closes it instead.
@@ -3411,14 +3417,25 @@ class GameScene extends Phaser.Scene {
       this.idolLightPool.color    = PAL.warmLight;
     }
 
+    // Night boost — every light source matters more in the dark.
+    // 0 by day → 1 deep night, ramping through dusk/dawn.
+    const hr = gameState.gameHour;
+    let nightF = 0;
+    if (hr >= 20 || hr < 6) nightF = 1;
+    else if (hr >= 19) nightF = hr - 19;        // dusk ramp up
+    else if (hr < 7) nightF = 7 - hr;           // dawn ramp down
+    this._nightFactor = nightF;
+    const nb = 1 + nightF * 0.7;                 // intensity boost
+    const nr = 1 + nightF * 0.25;                // radius boost
+
     this.lightPools.forEach(lp => {
       const f = flicker ? (0.9 + Math.random() * 0.2) : 1.0;
       // Outer glow
-      this.lightPoolGfx.fillStyle(lp.color, lp.intensity * 0.4 * f);
-      this.lightPoolGfx.fillEllipse(lp.x, lp.y, lp.radius * 1.6, lp.radius * 0.8);
+      this.lightPoolGfx.fillStyle(lp.color, Math.min(0.6, lp.intensity * 0.4 * f * nb));
+      this.lightPoolGfx.fillEllipse(lp.x, lp.y, lp.radius * 1.6 * nr, lp.radius * 0.8 * nr);
       // Inner glow
-      this.lightPoolGfx.fillStyle(lp.color, lp.intensity * f);
-      this.lightPoolGfx.fillEllipse(lp.x, lp.y, lp.radius, lp.radius * 0.5);
+      this.lightPoolGfx.fillStyle(lp.color, Math.min(0.8, lp.intensity * f * nb));
+      this.lightPoolGfx.fillEllipse(lp.x, lp.y, lp.radius * nr, lp.radius * 0.5 * nr);
     });
 
     // Player warm light — follows the player character
@@ -4153,7 +4170,10 @@ class GameScene extends Phaser.Scene {
       this._zuzkaJarGfx.clear();
       const jx = this.zuzkaSprite.x;
       const jy = this.zuzkaSprite.y - 6; // jar position relative to sprite
-      const flick = 0.12 + Math.sin(Date.now() * 0.003) * 0.06 + Math.random() * 0.04;
+      // Flare briefly when Zuzka is spoken to (acting beat)
+      if (this._zuzkaJarFlare > 0) this._zuzkaJarFlare -= 16;
+      const flareBoost = this._zuzkaJarFlare > 0 ? 1.8 : 1;
+      const flick = (0.12 + Math.sin(Date.now() * 0.003) * 0.06 + Math.random() * 0.04) * flareBoost;
       this._zuzkaJarGfx.fillStyle(PAL.candleLight, flick);
       this._zuzkaJarGfx.fillCircle(jx, jy, 4);
       this._zuzkaJarGfx.fillStyle(PAL.warmLight, flick * 0.3);
@@ -4672,6 +4692,9 @@ class GameScene extends Phaser.Scene {
 
   updateBackgroundVillagers(time, delta) {
     if (!this.bgVillagers) return;
+    // Midday silence is sacred — during the noon window every villager
+    // stops where they stand. The player learns the custom by watching.
+    if (typeof isTimeWindow === 'function' && isTimeWindow('noon')) return;
     for (const v of this.bgVillagers) {
       if (v.kind === 'sweeper') {
         // 3-frame sweep loop every 4s
@@ -4875,6 +4898,8 @@ class GameScene extends Phaser.Scene {
 
   updateEzra(time, delta) {
     if (!this.ezraSprite) return;
+    // The needle rests during the noon silence
+    if (typeof isTimeWindow === 'function' && isTimeWindow('noon')) return;
     this.ezraFrameTimer = (this.ezraFrameTimer || 0) + delta;
     // Slow needle pull: ~700ms per frame, 3-frame loop
     if (this.ezraFrameTimer > 700) {
@@ -5071,6 +5096,8 @@ class GameScene extends Phaser.Scene {
 
   updateMarta(time, delta) {
     if (!this.martaSprite) return;
+    // Her hands still for the noon silence (sorting can wait; the custom can't)
+    if (typeof isTimeWindow === 'function' && isTimeWindow('noon')) return;
     const ibbur = (typeof isTimeWindow === 'function')
       && (isTimeWindow('dawn') || isTimeWindow('dusk') || gameState.iburActive);
     const persona = ibbur ? 'ibbur' : 'marta';
@@ -6032,9 +6059,25 @@ class GameScene extends Phaser.Scene {
     try { sfx.play('dialogue_open'); } catch (e) {}
     // Baba's leitmotif rises with her dialogue
     if (typeof music !== 'undefined' && /Baba/.test(name || '')) {
-      try { sfx.play('door_baba'); } catch (e) {}
+      try { sfx.play('door_baba', { pan: this.babaSprite ? this._panFor(this.babaSprite.x) : 0 }); } catch (e) {}
       music.startBaba();
     }
+    // Acting beat — the speaker acknowledges you with a tiny settle
+    try {
+      const spk = name || '';
+      const actor = /Baba/.test(spk) ? this.babaSprite
+        : /Zuzka/.test(spk) ? this.zuzkaSprite
+        : /Ezra/.test(spk) ? this.ezraSprite
+        : /Marta|Ibbur/.test(spk) ? this.martaSprite : null;
+      if (actor) {
+        this.tweens.add({
+          targets: actor, scaleX: 1.04, scaleY: 0.96,
+          duration: 130, yoyo: true, ease: 'Sine.easeOut',
+        });
+      }
+      // Zuzka's fireflies notice the conversation
+      if (/Zuzka/.test(spk)) this._zuzkaJarFlare = 2200;
+    } catch (e) {}
     this.dialogueLines = lines;
     this.dialogueIndex = 0;
     this.dialogueOnClose = onClose || null;
@@ -8858,9 +8901,11 @@ class GameScene extends Phaser.Scene {
     // Animate dust
     this.updateDust();
 
-    // Baba idle — 2-frame breathing (slow, deliberate) + gentle sway
+    // Baba idle — 2-frame breathing (slow, deliberate) + gentle sway.
+    // She goes still while she reads you (her own dialogue) — attention.
     if (this.babaSprite) {
-      const babaTarget = (Math.floor(time / 1600) % 2);
+      const babaReading = this.dialogueActive && /Baba/.test(this.dialogueSpeaker || '');
+      const babaTarget = babaReading ? 0 : (Math.floor(time / 1600) % 2);
       if (babaTarget !== this.babaFrame) {
         this.babaFrame = babaTarget;
         this.drawBabaFrame(babaTarget);
@@ -8887,7 +8932,17 @@ class GameScene extends Phaser.Scene {
       this._curtainGfx.setDepth(994);
     }
     this._curtainGfx.clear();
+    // Window light spill — at night each lit window throws a soft warm
+    // wash onto the ground below it (strength follows the night factor)
+    const spillF = this._nightFactor || 0;
     this.windowPositions.forEach((win, idx) => {
+      if (spillF > 0.05) {
+        const flick = 0.85 + Math.sin(time * 0.004 + idx * 2.3) * 0.15;
+        this._curtainGfx.fillStyle(0xffb347, 0.10 * spillF * flick);
+        this._curtainGfx.fillEllipse(win.x, win.y + win.h / 2 + 8, win.w * 3.2, win.w * 1.4);
+        this._curtainGfx.fillStyle(0xffd890, 0.06 * spillF * flick);
+        this._curtainGfx.fillEllipse(win.x, win.y + win.h / 2 + 8, win.w * 4.5, win.w * 2);
+      }
       const sway = Math.sin(time * 0.0012 + idx * 1.7) * 1.5;
       // Left curtain
       this._curtainGfx.lineStyle(1, PAL.deepRed, 0.3);
@@ -9050,7 +9105,8 @@ class GameScene extends Phaser.Scene {
 
     const len = Math.sqrt(dx * dx + dy * dy);
     dx /= len; dy /= len;
-    const speed = this.moveSpeed * (delta / 16);
+    const brisk = this.briskKey && this.briskKey.isDown ? 1.35 : 1;
+    const speed = this.moveSpeed * brisk * (delta / 16);
     const newX = this.playerCartX + dx * speed;
     const newY = this.playerCartY + dy * speed;
     const tileX = Math.floor(newX), tileY = Math.floor(newY);
@@ -9085,6 +9141,13 @@ class GameScene extends Phaser.Scene {
     this.playerSprite.x = iso.x + this.worldOffset.x + (this.playerFxOffsetX || 0);
     this.playerSprite.y = iso.y + this.worldOffset.y + (this.playerFxOffsetY || 0);
     this.playerSprite._sortY = this.playerSprite.y;
+  }
+
+  // Stereo pan for a world-x position relative to the camera view.
+  _panFor(worldX) {
+    const cam = this.cameras.main;
+    const rel = (worldX - cam.midPoint.x) / (cam.width / cam.zoom / 2);
+    return Phaser.Math.Clamp(rel, -1, 1) * 0.75;
   }
 
   // ── REGENCY ATTENTION TELLS ────────────────────────────────────────
@@ -9124,7 +9187,7 @@ class GameScene extends Phaser.Scene {
     g.fillRect(wx - 5, wy - 9, 1, 1);            // one amber eye — watching
     g.y = -14;
     this.tweens.add({ targets: g, alpha: 1, y: 0, duration: 700, ease: 'Sine.easeOut' });
-    try { sfx.play('crow_caw', { volume: 0.35 }); } catch (e) {}
+    try { sfx.play('crow_caw', { volume: 0.35, pan: this._panFor(wx) }); } catch (e) {}
     this.time.delayedCall(6000, () => {
       this.tweens.add({
         targets: g, alpha: 0, y: -18, duration: 600, ease: 'Sine.easeIn',
@@ -9230,7 +9293,16 @@ class GameScene extends Phaser.Scene {
         this.interactPrompt.setVisible(false);
         const branch = this.getBabaDialogueBranch();
         this.babaBellSwing = 6; // trigger copper bell sway
-        this.openDialogue('Baba Elżbieta', branch.lines, branch.onClose, 'ornate');
+        // Memory callback — she noticed the perimeter walk (once)
+        let babaLines = branch.lines;
+        if (gameState.ritualState.perimeter_walked && !gameState._cbBabaPerimeter) {
+          gameState._cbBabaPerimeter = true;
+          babaLines = branch.lines.concat([
+            ">She looks at you a moment longer than usual.",
+            "You walked the bounds. The wards mentioned it. Don't let it flatter you — they mention everyone. They don't mention everyone approvingly.",
+          ]);
+        }
+        this.openDialogue('Baba Elżbieta', babaLines, branch.onClose, 'ornate');
       }
     } else if (zuzkaDist <= ZUZKA.interactRadius) {
       // Fallback: player reached Zuzka before her auto-approach completed
@@ -9248,7 +9320,15 @@ class GameScene extends Phaser.Scene {
       if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
         this.interactPrompt.setVisible(false);
         const branch = this.getZuzkaDialogueBranch();
-        this.openDialogue('Zuzka', branch.lines, branch.onClose, 'simple');
+        // Memory callback — she saw you keep the noon silence (once)
+        let zuzkaLines = branch.lines;
+        if (gameState.ritualState.noon_silence_kept && !gameState._cbZuzkaNoon) {
+          gameState._cbZuzkaNoon = true;
+          zuzkaLines = branch.lines.concat([
+            "You stood still at the bell. I saw. Even the chickens were impressed, and they are very hard to impress.",
+          ]);
+        }
+        this.openDialogue('Zuzka', zuzkaLines, branch.onClose, 'simple');
       }
     } else if (this.tryEzraInteraction()) {
       // handled
@@ -9374,7 +9454,15 @@ class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
       this.interactPrompt.setVisible(false);
       const branch = this.getEzraDialogueBranch();
-      this.openDialogue('Ezra', branch.lines, branch.onClose, 'simple');
+      // Memory callback — he noticed the watcher crow (once, high attention)
+      let ezraLines = branch.lines;
+      if (gameState.regencyAttention >= 3 && !gameState._cbEzraCrow) {
+        gameState._cbEzraCrow = true;
+        ezraLines = branch.lines.concat([
+          "A crow has been sitting on my roof-beam. They only gather like that when someone interesting is being watched. I'd be careful which forms you sign.",
+        ]);
+      }
+      this.openDialogue('Ezra', ezraLines, branch.onClose, 'simple');
     }
     return true;
   }
@@ -9795,7 +9883,10 @@ class GameScene extends Phaser.Scene {
       const d = Math.hypot(px - shrines[si].x, py - shrines[si].y);
       if (d <= 2.2 && !this._shrineSfxState[si]) {
         this._shrineSfxState[si] = true;
-        try { sfx.play('shrine_glow'); } catch (e) {}
+        try {
+          const siso = cartToIso(shrines[si].x, shrines[si].y);
+          sfx.play('shrine_glow', { pan: this._panFor(siso.x + this.worldOffset.x) });
+        } catch (e) {}
       } else if (d > 4) {
         this._shrineSfxState[si] = false;
       }
@@ -12343,6 +12434,7 @@ class MainMenuScene extends Phaser.Scene {
       ['1  2  3',    'Choose a dialogue response'],
       ['O  (hold)',  'Observe your surroundings carefully'],
       ['ESC',        'Pause · Return to menu'],
+      ['Shift (hold)', 'Walk briskly'],
       ['J',          'Open the Memory Journal'],
       ['M',          'Mute music'],
     ];
