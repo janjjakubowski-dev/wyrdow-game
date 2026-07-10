@@ -395,6 +395,8 @@ const gameState = {
   brelMode: 'neutral',        // 'low' | 'neutral' | 'high' — calculated at Codex collection
   brelArrivalDelay: 0,        // ms offset applied to Brel's arrival timer
   brelSceneFired: false,      // closing scene one-shot guard
+  act1Complete: false,        // true only after the title card has played
+  worldItemsTaken: [],        // ids of picked-up ground items (persisted)
   regencyFired: {},           // per-trigger dedupe map; keys set true after firing
 
   // ── Ezra the Cobbler ──
@@ -468,6 +470,17 @@ function loadGame() {
     if (!gameState.journal) gameState.journal = { entries: [], unread: [], selectedEntry: null };
     if (!gameState.journal.entries) gameState.journal.entries = [];
     if (!gameState.journal.unread) gameState.journal.unread = [];
+    if (!gameState.worldItemsTaken) gameState.worldItemsTaken = [];
+    // MARKERS is a module const — rebuild its placed flags from the save
+    // (they were previously never restored: knots were re-placeable and
+    // visions replayed after every reload)
+    try {
+      MARKERS.forEach(m => { m.placed = (gameState.markersFound || []).includes(m.id); });
+    } catch (e) {}
+    // Repair: a save taken mid-Brel-scene has brelSceneFired=true but the
+    // ending never finished (act1Complete unset) — let it re-fire so the
+    // Act 1 ending isn't permanently lost
+    if (gameState.brelSceneFired && !gameState.act1Complete) gameState.brelSceneFired = false;
     gameState.hasSave = true;
     return true;
   } catch (e) { console.warn('loadGame failed', e); return false; }
@@ -2127,6 +2140,23 @@ class GameScene extends Phaser.Scene {
 
     // Thread knot HUD (top right) — created hidden, shown when quest activates
     this.createThreadKnotHUD();
+
+    // ── Continue restore — rebuild visual quest state from the save ──
+    // (markers, hand glow, and the knot HUD previously reset on reload)
+    if (!this.firstVisit && gameState.knotsGiven) {
+      try {
+        MARKERS.forEach((m, i) => {
+          m.placed = (gameState.markersFound || []).includes(m.id);
+          if (m.placed && this.redrawMarkerPlaced) this.redrawMarkerPlaced(i);
+        });
+        this.handGlowLevel = Math.min(5, gameState.knotsPlaced || 0);
+        if (gameState.knotsPlaced < 5) {
+          this.showThreadKnotHUD();
+          // Hide icons for knots already placed
+          for (let i = 0; i < (gameState.knotsPlaced || 0); i++) this.removeThreadKnotFromHUD();
+        }
+      } catch (e) {}
+    }
 
     if (this.firstVisit) this.beginPostAwakening();
   }
@@ -6380,7 +6410,9 @@ class GameScene extends Phaser.Scene {
   // ── PAUSE MENU (Esc) ─────────────────────────────────────────────
   // Overlay with Resume / Return to Menu / Close Game.
   togglePauseMenu() {
-    if (this.dialogueActive) return; // Esc shouldn't fight dialogue
+    // Esc shouldn't fight dialogue, visions, cutscenes, or modal overlays
+    if (this.dialogueActive || this.visionActive || this._cutsceneActive
+      || this._domovoiSelectorOpen || this._regencyDocOpen) return;
     if (this._pauseLayer) { this._closePauseMenu(); return; }
     const cam = this.cameras.main;
     const W = cam.width, H = cam.height;
@@ -6590,8 +6622,9 @@ class GameScene extends Phaser.Scene {
 
   toggleJournal() {
     if (this._journalOpen) { this._closeJournal(); return; }
-    // Block during dialogue, vision, or pause menu
-    if (this.dialogueActive || this.visionActive || this._paused || this._pauseLayer) return;
+    // Block during dialogue, vision, cutscene, pause, or modal overlays
+    if (this.dialogueActive || this.visionActive || this._paused || this._pauseLayer
+      || this._cutsceneActive || this._domovoiSelectorOpen || this._regencyDocOpen) return;
     this._openJournal();
   }
 
@@ -7882,6 +7915,10 @@ class GameScene extends Phaser.Scene {
   //  POŁUDNICA — The Noonwraith Appearance (after all 5 visions)
   // ══════════════════════════════════════════════════════════════════
   triggerPoludnica() {
+    // Cutscene lock — blocks pause/journal/observation/interactions so
+    // her single 13s appearance can't be hidden behind an overlay
+    this._cutsceneActive = true;
+    this.time.delayedCall(16000, () => { this._cutsceneActive = false; });
     const cam = this.cameras.main;
     const w = cam.width, h = cam.height;
     // Południca's theme — single play, ducks all music to ~10%.
@@ -8029,10 +8066,13 @@ class GameScene extends Phaser.Scene {
   checkBrelTrigger() {
     if (gameState.brelSceneFired) return;
     if (!gameState.codexFragmentCollected) return;
-    if (this.dialogueActive) return;
+    if (this.dialogueActive || this.visionActive || this._paused
+      || this._pauseLayer || this._cutsceneActive) return;
     const exit = { x: CENTER - 0.5, y: MAP_SIZE - 1 };
     const d = Math.hypot(this.playerCartX - exit.x, this.playerCartY - exit.y);
-    if (d > 3) return;
+    // Radius 1.0 (was 3): the wider ring swallowed the signpost memory
+    // fragment and the southern Nocnica zone, which sit 1.0-1.2 away
+    if (d > 1.0) return;
     gameState.brelSceneFired = true;
     this.triggerWellnessOfficer();
   }
@@ -8041,6 +8081,9 @@ class GameScene extends Phaser.Scene {
   //  WELLNESS OFFICER CLOSING SCENE — orchestrated, mode-aware
   // ══════════════════════════════════════════════════════════════════
   triggerWellnessOfficer() {
+    // Cutscene lock for the whole closing sequence — released by the
+    // title card (showAct1TitleCard), which is its final beat
+    this._cutsceneActive = true;
     if (this.officerScenePlayed) return;
     this.officerScenePlayed = true;
     const scene = this;
@@ -8648,6 +8691,10 @@ class GameScene extends Phaser.Scene {
     if (this.act1TitleShown) return;
     this.act1TitleShown = true;
     gameState.act = 2;
+    // The ending has actually played — persist it. Without this save the
+    // whole Brel sequence + title card reverted on tab close and replayed.
+    gameState.act1Complete = true;
+    try { saveGame(); } catch (e) {}
 
     // Awakening theme — Play 3: under the title card, begins at +2s, 30%,
     // fades out with the card after the standard 4s hold + 2s fade.
@@ -8791,7 +8838,9 @@ class GameScene extends Phaser.Scene {
           scene.player.x = exit.x + scene.worldOffset.x;
           scene.player.y = exit.y + scene.worldOffset.y;
         }
-        // Cleanup card layer
+        // Cleanup card layer — the Act 1 ending is over; release the
+        // cutscene lock taken in triggerWellnessOfficer
+        scene._cutsceneActive = false;
         bg.destroy(); dust.destroy(); topRule.destroy(); botRule.destroy();
         subtitle.destroy();
         letterObjs.forEach(t => t.destroy());
@@ -9066,8 +9115,9 @@ class GameScene extends Phaser.Scene {
   }
 
   handleMovement(delta) {
-    // Frozen while the journal or pause menu is open
-    if (this._paused || this._pauseLayer) return;
+    // Frozen while the journal, pause menu, or a modal overlay is open
+    if (this._paused || this._pauseLayer
+      || this._domovoiSelectorOpen || this._regencyDocOpen) return;
     let dx = 0, dy = 0;
     if (this.cursors.up.isDown)    { dx -= 1; dy -= 1; }
     if (this.cursors.down.isDown)  { dx += 1; dy += 1; }
@@ -9270,6 +9320,14 @@ class GameScene extends Phaser.Scene {
   // Selects the correct dialogue branch based on gameState,
   // then fires a callback when the conversation ends to update state.
   handleInteraction() {
+    // No world interactions while an overlay, cutscene, or pause owns the
+    // input — E presses were opening NPC dialogue UNDER the pause menu
+    // and locking ESC out entirely
+    if (this._paused || this._pauseLayer || this._cutsceneActive
+      || this._domovoiSelectorOpen || this._regencyDocOpen) {
+      if (this.interactPrompt) this.interactPrompt.setVisible(false);
+      return;
+    }
     // Check Baba proximity
     const bdx = this.playerCartX - BABA.cartX;
     const bdy = this.playerCartY - BABA.cartY;
@@ -9304,7 +9362,10 @@ class GameScene extends Phaser.Scene {
         }
         this.openDialogue('Baba Elżbieta', babaLines, branch.onClose, 'ornate');
       }
-    } else if (zuzkaDist <= ZUZKA.interactRadius) {
+    } else if (zuzkaDist <= ZUZKA.interactRadius
+      && this.zuzkaSprite && this.zuzkaSprite.visible) {
+      // (visibility check: during the closing scene she walks into Baba's
+      // house — the prompt used to let you talk to an invisible Zuzka)
       // Fallback: player reached Zuzka before her auto-approach completed
       if (this._zuzkaApproaching || this._zuzkaApproachQueued) {
         this.cancelZuzkaApproach();
@@ -9342,6 +9403,10 @@ class GameScene extends Phaser.Scene {
     if (gameState.firstVillageEntry) return;
     if (this._zuzkaApproaching || this._zuzkaApproachQueued) return;
     if (!this.zuzkaSprite || this.dialogueActive) return;
+    // Don't start walking toward a player who is reading the journal or
+    // sitting in the pause menu — the approach used to complete under
+    // the overlay and open her dialogue invisibly
+    if (this._paused || this._pauseLayer || this._cutsceneActive) return;
 
     // Trigger threshold: player has crossed inward — within 8 tiles of
     // the idol but not yet inside Zuzka's interact radius.
@@ -9388,9 +9453,28 @@ class GameScene extends Phaser.Scene {
       },
       onComplete: () => {
         if (!this._zuzkaApproaching) return;
-        this.openDialogue('Zuzka', ZUZKA_DIALOGUE.firstEncounter, () => {
-          gameState.zuzkaMetOnce = true; try { saveGame(); } catch (e) {}
+        // If another dialogue/overlay owns the screen when she arrives,
+        // wait for it — openDialogue silently drops swallowed calls,
+        // which used to strand her mid-map with flags stuck
+        const zuzkaOpenWhenClear = () => {
+          if (!this._zuzkaApproaching) return;
+          if (this.dialogueActive || this.visionActive || this._paused
+            || this._pauseLayer || this._cutsceneActive) {
+            this.time.delayedCall(600, zuzkaOpenWhenClear);
+            return;
+          }
+          this._zuzkaStartFirstEncounter();
+        };
+        zuzkaOpenWhenClear();
+      },
+    });
+  }
+
+  _zuzkaStartFirstEncounter() {
+    this.openDialogue('Zuzka', ZUZKA_DIALOGUE.firstEncounter, () => {
+          gameState.zuzkaMetOnce = true;
           gameState.firstVillageEntry = true;
+          try { saveGame(); } catch (e) {} // after BOTH flags — else the approach replays on reload
           this._zuzkaApproaching = false;
           // Send her quietly back to the idol base
           if (this.zuzkaSprite && this._zuzkaApproachOrigin) {
@@ -9409,8 +9493,6 @@ class GameScene extends Phaser.Scene {
             });
           }
         }, 'simple');
-      },
-    });
   }
 
   // Called by handleInteraction when the player reaches Zuzka before her
@@ -9541,7 +9623,10 @@ class GameScene extends Phaser.Scene {
   getBabaDialogueBranch() {
 
     // ── Act 2+: repeat visits ───────────────────────────────────────
-    if (gameState.act >= 2) {
+    // Requires the ending to have actually played: the codex onClose
+    // sets act=2 immediately, which used to serve Act 2 farewell content
+    // in the very next conversation of Act 1.
+    if (gameState.act >= 2 && gameState.act1Complete) {
       if (!gameState.hasBurntBraid) {
         return {
           lines: BABA_DIALOGUE.act2_firstReturn,
@@ -9559,7 +9644,10 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── Act 1: Quest complete — all 5 knots placed ──────────────────
-    if (gameState.knotsPlaced >= 5 && !gameState.questComplete) {
+    // Gate on codexFragmentCollected, NOT questComplete: the vision-end
+    // timer sets questComplete seconds after the 5th vision, which made
+    // this reveal branch unreachable at walking speed (golden-path lock).
+    if (gameState.knotsPlaced >= 5 && !gameState.codexFragmentCollected) {
       return {
         lines: BABA_DIALOGUE.questComplete,
         onClose: () => {
@@ -9570,7 +9658,6 @@ class GameScene extends Phaser.Scene {
           try { sfx.play('codex_reveal'); } catch (e) {}
           gameState.codexFragmentCollected = true;
           try { addJournalEntry('baba_revelation'); } catch (e) {}
-          try { saveGame(); } catch (e) {}
           this.showItemNotification('Received: Cure Codex Fragment · Glass Charm');
           // Advance to Act 2 after this conversation
           gameState.act = 2;
@@ -9585,6 +9672,9 @@ class GameScene extends Phaser.Scene {
           if (gameState.brelMode === 'low')      gameState.brelArrivalDelay = 90000;
           else if (gameState.brelMode === 'high') gameState.brelArrivalDelay = -11000;
           else                                        gameState.brelArrivalDelay = 0;
+          // Save AFTER act/brelMode are locked in — an earlier snapshot
+          // silently dropped the earned finale variant on reload
+          try { saveGame(); } catch (e) {}
         },
       };
     }
@@ -9602,12 +9692,15 @@ class GameScene extends Phaser.Scene {
       return {
         lines: BABA_DIALOGUE.firstMeeting,
         onClose: () => {
-          gameState.babaMetOnce = true; try { saveGame(); } catch (e) {}
+          gameState.babaMetOnce = true;
           gameState.knotsGiven = true;
           gameState.inventory.push('thread_knots');
           this.showItemNotification('Received: Five Thread Knots');
           // ── Activate the crossroads quest ──
           gameState.questActive = true;
+          // Save AFTER all flags are set — an early snapshot could strand
+          // a reloaded run with babaMetOnce but no quest
+          try { saveGame(); } catch (e) {}
           if (typeof music !== 'undefined') music.startCrossroadsIfIdle();
           this.showThreadKnotHUD();
         },
@@ -9782,17 +9875,25 @@ class GameScene extends Phaser.Scene {
       { x: M / 2, y: M - 1, hit: false }, { x: 1, y: M - 1, hit: false },
       { x: 1, y: M / 2, hit: false },
     ];
+    // Restore partial progress — 7/8 waypoints used to reset on reload
+    (gameState.perimeterHits || []).forEach(i => {
+      if (this._perimeterWaypoints[i]) this._perimeterWaypoints[i].hit = true;
+    });
 
     // ── Ritual 2: Domovoi Offering ──
     // Door zone position (matches inn doorstep observation zone)
     this._domovoiZone = { x: 7, y: 9, r: 1.5 };
-    this._domovoiSequence = []; // sequence of items left at the door
+    // Sequence of items left at the door — mirrored from the save so a
+    // reload mid-ritual doesn't eat the bread and reset the sequence
+    this._domovoiSequence = (gameState.domovoiSequence || []).slice();
 
     // World items to find: bread (market) and salt (near a house door).
     // Stored as collectible spawns; player picks them up by walking onto.
     this._worldItems = [
       { id: 'bread', x: 11, y: 16, taken: false, color: 0xc8a468 },
       { id: 'salt',  x: 16, y: 8,  taken: false, color: 0xeeeae0 },
+      // (taken flags are re-synced from gameState.worldItemsTaken below —
+      //  without that, every reload respawned the items for duplication)
       // Memory Fragment under the south signpost — only visible after Domovoi Scene 2
       { id: 'memory_fragment',
         x: CENTER - 0.5, y: MAP_SIZE - 2.2,
@@ -9821,6 +9922,10 @@ class GameScene extends Phaser.Scene {
         },
       },
     ];
+    // Re-sync taken flags from the save so items don't respawn on reload
+    this._worldItems.forEach(it => {
+      if ((gameState.worldItemsTaken || []).includes(it.id)) it.taken = true;
+    });
 
     // ── Ritual 3: Noon Silence ──
     // Internal day clock — full cycle every 20 real minutes (1,200,000 ms)
@@ -9850,16 +9955,18 @@ class GameScene extends Phaser.Scene {
   }
 
   // Internal: time-of-day in hours [0, 24)
+  // All three derive from gameState.gameHour — the ONE persisted world
+  // clock. There used to be a second scene-local 20-minute clock driving
+  // these, which desynced the noon/dusk rituals from the sky, the sun
+  // dial, and every reload.
   getHourOfDay() {
-    const t = (this._dayClockMs % this._dayLengthMs) / this._dayLengthMs;
-    return t * 24;
+    return gameState.gameHour;
   }
   isNoon() {
-    const ms = this._dayClockMs % this._dayLengthMs;
-    return ms >= this._noonStartMs && ms <= this._noonEndMs;
+    return gameState.gameHour >= 12 && gameState.gameHour < 13;
   }
   isAfterDusk() {
-    const h = this.getHourOfDay();
+    const h = gameState.gameHour;
     return h >= 19 || h < 5;
   }
 
@@ -9910,12 +10017,25 @@ class GameScene extends Phaser.Scene {
       }
     }
 
+    // Ritual checks stop here while any overlay/cutscene owns the input.
+    // (Footstep handling above must keep running so loops stop cleanly.)
+    // Without this, navigating the journal during the noon window counted
+    // as "breaking the silence" and cost Regency Attention.
+    if (this._paused || this._pauseLayer || this.dialogueActive || this.visionActive
+      || this._cutsceneActive || this._domovoiSelectorOpen || this._regencyDocOpen) return;
+
     // ── Ritual 1: Perimeter waypoints ──
     if (!gameState.ritualState.perimeter_walked) {
       let allHit = true;
-      for (const w of this._perimeterWaypoints) {
+      for (let wi = 0; wi < this._perimeterWaypoints.length; wi++) {
+        const w = this._perimeterWaypoints[wi];
         if (!w.hit) {
-          if (Math.hypot(px - w.x, py - w.y) <= 1.8) w.hit = true;
+          if (Math.hypot(px - w.x, py - w.y) <= 1.8) {
+            w.hit = true;
+            // Persist partial progress
+            if (!gameState.perimeterHits) gameState.perimeterHits = [];
+            if (!gameState.perimeterHits.includes(wi)) gameState.perimeterHits.push(wi);
+          }
         }
         if (!w.hit) allHit = false;
       }
@@ -9953,9 +10073,12 @@ class GameScene extends Phaser.Scene {
       if (it.requires && !it.requires()) continue;
       if (Math.hypot(px - it.x, py - it.y) <= 0.7) {
         it.taken = true;
+        if (!gameState.worldItemsTaken) gameState.worldItemsTaken = [];
+        gameState.worldItemsTaken.push(it.id); // persisted — no respawn dupes
         gameState.inventory.push(it.id);
         if (it.onPickup) it.onPickup();
-        else this.showItemNotification('Picked up: ' + it.id);
+        else this.showItemNotification('Picked up: ' + itemDisplayName(it.id));
+        try { saveGame(); } catch (e) {}
       }
     }
     // Draw world item sparkles (lazy graphics)
@@ -10025,7 +10148,9 @@ class GameScene extends Phaser.Scene {
       }
       if (!anyKey) {
         this._noonStillTimer += delta;
-        if (this._noonStillTimer >= 60000 && !gameState.ritualState.noon_silence_kept) {
+        // 30s of stillness inside the 2-minute noon hour — the old 60s
+        // requirement equalled the entire ritual window (impossible)
+        if (this._noonStillTimer >= 30000 && !gameState.ritualState.noon_silence_kept) {
           gameState.ritualState.noon_silence_kept = true;
         }
       } else {
@@ -10270,6 +10395,7 @@ class GameScene extends Phaser.Scene {
     const idx = gameState.inventory.indexOf(itemId);
     if (idx >= 0) gameState.inventory.splice(idx, 1);
     this._domovoiSequence.push(itemId);
+    gameState.domovoiSequence = this._domovoiSequence.slice(); // persist mid-ritual
     this.interactPrompt.setVisible(false);
 
     const personals = ['glass_charm', 'firefly', 'memory_fragment'];
@@ -10282,6 +10408,7 @@ class GameScene extends Phaser.Scene {
       }
       this.playDomovoiScene(1);
       this._domovoiSequence = [];
+      gameState.domovoiSequence = [];
     };
 
     if (this._domovoiSequence.length === 1) {
@@ -10312,6 +10439,7 @@ class GameScene extends Phaser.Scene {
         ]);
         // Reset to [bread, salt]
         this._domovoiSequence = ['bread', 'salt'];
+        gameState.domovoiSequence = ['bread', 'salt'];
       }
     }
   }
@@ -10838,6 +10966,14 @@ class GameScene extends Phaser.Scene {
 
   updateObservation(delta) {
     if (!this.observeKey) return;
+    // Never start (and always end) observation under overlays/cutscenes —
+    // holding O in the journal used to zoom the camera behind the panel
+    if (this._paused || this._pauseLayer || this._cutsceneActive
+      || this._domovoiSelectorOpen || this._regencyDocOpen) {
+      if (this._obsActive) this.endObservation();
+      this._obsHoldTime = 0;
+      return;
+    }
     const moving = this.cursors && (this.cursors.up.isDown || this.cursors.down.isDown
       || this.cursors.left.isDown || this.cursors.right.isDown);
 
@@ -12286,6 +12422,7 @@ class MainMenuScene extends Phaser.Scene {
   }
 
   _move(dir) {
+    if (this._settingsOpen || this._creditsOpen || this._activating) return;
     let i = this._selection;
     for (let n = 0; n < this.menuItems.length; n++) {
       i = (i + dir + this.menuItems.length) % this.menuItems.length;
@@ -12296,6 +12433,9 @@ class MainMenuScene extends Phaser.Scene {
 
   _activate(i) {
     if (this._activating) return;
+    // E/Enter used to start a New Game underneath an open Settings or
+    // Credits overlay, wiping state while the panel stayed on screen
+    if (this._settingsOpen || this._creditsOpen) return;
     const item = this.menuItems[i];
     if (!item || item.greyed) {
       if (item && item.label === 'Continue') this._showNoSaveMessage();
@@ -12328,22 +12468,27 @@ class MainMenuScene extends Phaser.Scene {
   _startNewGame() {
     this._activating = true;
     this._fadeAudioOut(1500);
-    // Reset gameState for a fresh playthrough
-    try {
-      // Remove existing save so a fresh run starts clean
-      // (the player can save again as they progress)
-      // Note: settings remain — they live in a different key.
-    } catch (e) {}
+    // Remove the existing save so a fresh run starts clean
+    // (settings remain — they live under a different key)
+    try { localStorage.removeItem(SAVE_KEY); gameState.hasSave = false; } catch (e) {}
     this.cameras.main.fadeOut(1500, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      // Reset transient runtime state
+      // Reset ALL runtime state — a partial reset leaked NPC sub-states,
+      // item flags, and MARKERS.placed from the previous run
       gameState.act = 1;
       gameState.knotsPlaced = 0; gameState.markersFound = [];
       gameState.questActive = false; gameState.questComplete = false;
       gameState.codexFragmentCollected = false;
       gameState.babaMetOnce = false; gameState.knotsGiven = false;
       gameState.zuzkaMetOnce = false; gameState.firstVillageEntry = false;
+      gameState.zuzkaSecondTalk = false; gameState.zuzkaFarewellDone = false;
+      gameState.hasFirefly = false; gameState.hasGlassCharm = false;
+      gameState.hasBurntBraid = false;
       gameState.inventory = [];
+      gameState.worldItemsTaken = [];
+      gameState.memoryFragments = [];
+      gameState.perimeterHits = [];
+      gameState.domovoiSequence = [];
       gameState.observedZones = [];
       gameState.journal = { entries: [], unread: [], selectedEntry: null };
       gameState.ritualState = {
@@ -12354,10 +12499,20 @@ class MainMenuScene extends Phaser.Scene {
         nocnica_found: false,
         wisp_choice: null,
       };
+      gameState.ezraState = { sceneShown: null, copperWireGiven: false, codexShown: false };
+      gameState.domovoiState = { sceneShown: null, sceneShownAct2: false, signpostFragmentFound: false };
+      gameState.dziadekState = { revealed: false, sceneShown: 0, pageGiven: false };
+      gameState.martaState = { martaScene: 0, ibburScene: 0, lastSeenAs: null, handoverShown: false };
       gameState.regencyAttention = 0;
       gameState.regencyFired = {};
       gameState.brelSceneFired = false;
+      gameState.act1Complete = false;
+      gameState.brelMode = 'neutral'; gameState.brelArrivalDelay = 0;
+      gameState._noonBellRung = false;
       gameState.gameHour = 8.0;
+      // MARKERS is a module const — its placed flags survive Return to
+      // Menu and made replayed quests unwinnable until page refresh
+      try { MARKERS.forEach(m => { m.placed = false; }); } catch (e) {}
       this._showTutorialCard(() => this.scene.start('OpeningScene'));
     });
   }
