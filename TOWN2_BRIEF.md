@@ -103,6 +103,26 @@ hiss, lamp-house hum, mine-gate groan.
 New "MIEDŹNO" section header (built), page "II.". ~12 entries: 3 visions, 4 NPC
 revelations, 3 observations, 1 document (Vosk's tally), 1 ritual completion.
 
+## LBA-mandate amendment *(blessed direction, 2026-07-12)*
+
+The implied Regency furniture is now explicit quest machinery:
+
+- **Entry checkpoint** at the west gate demands a **travel permit** — the player's first
+  permit is issued in the shipped Wyrdów return (Brel's office stamp, or Pin's first
+  "miscount" if attention ran high). Papers, presented, every entry.
+- **Enumerator patrols** walk visible routes through the town (2–3 routes, day-scheduled).
+  Caught somewhere restricted (the terraces after curfew, the crucible yard) → escorted
+  to the **Records Office** interior, signed out in triplicate; Regency Attention +1,
+  small confiscation. Never a game-over.
+- **Quiet Step** stance is how the town lives: villagers drop into it near patrols —
+  taught by watching, like the noon silence.
+- **Interiors** (small TownDefinitions): The Ladder's common room, the Records Office,
+  the lamp house. Srulik's study house if budget allows.
+- **The terraces use z-levels** — first elevation in the game; knock-listening points
+  sit on different heights.
+- **Charm economy debut**: surrendered-charm queue at the crucible is the tragedy;
+  hidden poppy-seed charms in nooks are the resistance. Charms barter for favors.
+
 ## Open questions for the creator
 
 1. **The Sleeper's origin** — built to protect the town from the Collapse, or something

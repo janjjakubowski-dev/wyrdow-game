@@ -280,6 +280,38 @@ const MARKERS = [
   { id: 'dead_tree',     x: MAP_SIZE - 4, y: 3,            name: 'The Dead Tree',           placed: false },
 ];
 
+// ── TOWN REGISTRY — Phase B foundation ──────────────────────────────
+// A TownDefinition bundles everything the world loader needs to build a
+// place. Wyrdów's definition wraps the existing module constants so the
+// current game keeps working unchanged; new towns (and INTERIORS, which
+// are just small towns entered through a door trigger) add entries here.
+// Schema grows as Phase B lands: id, name, size, map, houses, shrines,
+// markers, palette, interiors, patrols, checkpoints, charms, zLevels.
+const TOWNS = {
+  wyrdow: {
+    id: 'wyrdow',
+    name: 'Wyrdów',
+    subtitle: 'The Crossroads Village',
+    size: MAP_SIZE,
+    map: map,            // tile grid: 0 grass, 1 dirt, 2 center, 3 house, 4 mud, 5 fifth road
+    houses: houses,
+    shrines: shrines,
+    markers: MARKERS,
+    journalHeader: 'W Y R D Ó W',
+    pageNumeral: 'I.',
+    // LBA-mandate fields — deliberately empty in Act 1 (no patrols in
+    // Wyrdów; the Regency's arrival on the map IS the story escalation)
+    interiors: {},
+    patrols: [],
+    checkpoints: [],
+    charms: [],
+    zLevels: null,       // flat village; Miedźno introduces terraces
+  },
+};
+function activeTown() {
+  return TOWNS[gameState.currentTown || 'wyrdow'] || TOWNS.wyrdow;
+}
+
 // ── QUEST STATE ─────────────────────────────────────────────────────
 // Global quest object that all game elements read from. Mirrors a few
 // fields in gameState so the existing systems (dialogue branches, NPC
@@ -397,6 +429,7 @@ const gameState = {
   brelSceneFired: false,      // closing scene one-shot guard
   act1Complete: false,        // true only after the title card has played
   worldItemsTaken: [],        // ids of picked-up ground items (persisted)
+  currentTown: 'wyrdow',      // active TownDefinition id (Phase B)
   regencyFired: {},           // per-trigger dedupe map; keys set true after firing
 
   // ── Ezra the Cobbler ──
@@ -2069,6 +2102,16 @@ class GameScene extends Phaser.Scene {
     // Brisk walk — hold Shift for a hurried pace (not a run; the roads
     // deserve respect, but the player's time deserves it too)
     this.briskKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    // ── Quiet Step stance (LBA mandate, B7) ──
+    // Q toggles: slow, silent footsteps, keener observation. Groundwork
+    // for patrol perception in Act 2 — patrols won't notice a quiet walker.
+    this._stanceQuiet = false;
+    this.input.keyboard.on('keydown-Q', () => {
+      if (this.dialogueActive || this.visionActive || this._paused
+        || this._pauseLayer || this._cutsceneActive) return;
+      this._stanceQuiet = !this._stanceQuiet;
+      this._updateStanceHUD();
+    });
     this.playerFacing = 'se'; // current facing direction
     // ESC opens the in-game pause menu (Resume / Return to Menu).
     // If the journal is open, ESC closes it instead.
@@ -9155,8 +9198,10 @@ class GameScene extends Phaser.Scene {
 
     const len = Math.sqrt(dx * dx + dy * dy);
     dx /= len; dy /= len;
-    const brisk = this.briskKey && this.briskKey.isDown ? 1.35 : 1;
-    const speed = this.moveSpeed * brisk * (delta / 16);
+    // Stance speed: Quiet Step overrides Hurried — you cannot rush quietly
+    const stanceMul = this._stanceQuiet ? 0.55
+      : (this.briskKey && this.briskKey.isDown ? 1.35 : 1);
+    const speed = this.moveSpeed * stanceMul * (delta / 16);
     const newX = this.playerCartX + dx * speed;
     const newY = this.playerCartY + dy * speed;
     const tileX = Math.floor(newX), tileY = Math.floor(newY);
@@ -9191,6 +9236,18 @@ class GameScene extends Phaser.Scene {
     this.playerSprite.x = iso.x + this.worldOffset.x + (this.playerFxOffsetX || 0);
     this.playerSprite.y = iso.y + this.worldOffset.y + (this.playerFxOffsetY || 0);
     this.playerSprite._sortY = this.playerSprite.y;
+  }
+
+  // ── Stance HUD — a quiet word in the corner, only when it matters ──
+  _updateStanceHUD() {
+    const cam = this.cameras.main;
+    if (!this._stanceText) {
+      this._stanceText = this.add.text(16, cam.height - 24, '', {
+        fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic',
+        color: '#8a9ab8', stroke: '#0e0e14', strokeThickness: 3,
+      }).setScrollFactor(0).setDepth(1003);
+    }
+    this._stanceText.setText(this._stanceQuiet ? '❖ quiet step' : '');
   }
 
   // Stereo pan for a world-x position relative to the camera view.
@@ -10005,7 +10062,9 @@ class GameScene extends Phaser.Scene {
       const ty = Math.max(0, Math.min(MAP_SIZE - 1, Math.round(py)));
       const tile = (map[ty] && map[ty][tx]) || 0;
       const onRoad = (tile === 1 || tile === 2 || tile === 5);
-      const canWalk = moving && !this.dialogueActive && !this.visionActive && !this._paused;
+      // Quiet Step makes no footstep sound at all — that's the point
+      const canWalk = moving && !this.dialogueActive && !this.visionActive
+        && !this._paused && !this._stanceQuiet;
       if (canWalk) {
         if (onRoad) {
           try { sfx.loop('footsteps_dirt', 1, 250); sfx.stopLoop('footsteps_grass', 250); } catch (e) {}
@@ -10990,7 +11049,9 @@ class GameScene extends Phaser.Scene {
 
     if (this.observeKey.isDown && !moving && !this.dialogueActive && !this.visionActive) {
       this._obsHoldTime += delta;
-      if (this._obsHoldTime >= 1500 && !this._obsActive) {
+      // Moving through the world quietly, you notice things faster
+      const obsThreshold = this._stanceQuiet ? 800 : 1500;
+      if (this._obsHoldTime >= obsThreshold && !this._obsActive) {
         this.startObservation();
       }
     } else {
@@ -12509,6 +12570,7 @@ class MainMenuScene extends Phaser.Scene {
       gameState.act1Complete = false;
       gameState.brelMode = 'neutral'; gameState.brelArrivalDelay = 0;
       gameState._noonBellRung = false;
+      gameState.currentTown = 'wyrdow';
       gameState.gameHour = 8.0;
       // MARKERS is a module const — its placed flags survive Return to
       // Menu and made replayed quests unwinnable until page refresh
@@ -12590,6 +12652,7 @@ class MainMenuScene extends Phaser.Scene {
       ['O  (hold)',  'Observe your surroundings carefully'],
       ['ESC',        'Pause · Return to menu'],
       ['Shift (hold)', 'Walk briskly'],
+      ['Q',          'Quiet Step — slow, silent, keen-eyed'],
       ['J',          'Open the Memory Journal'],
       ['M',          'Mute music'],
     ];

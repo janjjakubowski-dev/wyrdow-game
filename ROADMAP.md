@@ -39,19 +39,48 @@ thread-shimmer quest guidance. Live on Vercel.
 | A5 | Generate `brel_theme.mp3` (Suno) and wire it | Loader slot is documented in code |
 | A6 | Absolute og:image URL | Once the final domain is settled |
 
-## Phase B — Multi-town engine foundations *(2–3 sessions)*
+## Design north star — the LBA mandate *(blessed 2026-07-12)*
+
+Wyrdów aims for **Little Big Adventure's feel and fun factor**, adapted to the bible's
+nonviolent folk world. The seven properties we build toward, and their Wyrdów forms:
+
+1. **Embodied oppression** — from Act 2, the Regency is ON the map: patrolling
+   Enumerators with visible routes, permit checkpoints, and a caught-consequence loop
+   (escorted to the Records Office, signed out in triplicate — the prison-escape analog,
+   played for dread-comedy). Act 1 stays patrol-free by design; escalation IS the story.
+2. **Enterable interiors** — an interior is just a small TownDefinition entered by a door
+   trigger. First three: Baba's house, The Ladder's common room, the Records Office.
+3. **Stances, adapted** — Open / Hurried (Shift) / **Quiet Step** (toggle): slow, silent
+   footsteps, patrols don't notice, needed for eavesdropping and night rituals. No
+   Aggressive mode ever — our verbs are charms, rituals, misdirection.
+4. **Kinetic traversal** — tile z-levels, ladders/steps, a small hop. Debuts on
+   Miedźno's three terraces.
+5. **Bureaucratic item-gating** — travel permits, stamped forms, IDs. Comedy and dread
+   share the same paperwork.
+6. **Persistent open world** — every visited town and road stays revisitable with
+   act-based state changes. Never a one-way corridor.
+7. **Curiosity economy** — hidden poppy-seed charms (barter, not coins), flavor lines on
+   every prop via the observation system.
+
+**Not taken from LBA:** combat and death. Failure currency stays Regency Attention,
+confiscation, and lost time — consequences without a game-over screen.
+
+## Phase B — Multi-town engine foundations *(3–5 sessions, expanded for LBA mandate)*
 
 The current engine hardwires one 24×24 map in globals (`map[]`, `houses`, `shrines`,
 `MARKERS`, NPC constants). Towns must become **data** before town 2 can exist.
 
 | # | Task | Notes |
 |---|------|-------|
-| B1 | `TownDefinition` schema | Map layout, palette, houses, shrines, NPC registry, markers, ambient set, time-window events — all as data inside the single HTML file |
-| B2 | World loader | GameScene builds from the active TownDefinition; clean teardown on travel |
+| B1 | `TownDefinition` schema | Map layout, palette, houses, shrines, NPC registry, markers, ambient set, time-window events — all as data inside the single HTML file. **Schema includes: interiors (small TownDefinitions + door triggers), tile z-levels, patrol routes, checkpoint/permit gates, charm spawns** |
+| B2 | World loader | GameScene builds from the active TownDefinition; clean teardown on travel; door transitions for interiors |
 | B3 | Travel interstitial | Road-walking vignette between towns — "the roads remember" motif |
 | B4 | Save format v2 + migration | Per-town state namespaces; never break existing saves |
 | B5 | Journal town sections | Section headers + roman-numeral pages II–V (already anticipated in UI) |
-| B6 | Cross-town Regency | Attention persists; Brel (or colleagues) recur with escalating paperwork |
+| B6 | Cross-town Regency | Attention persists; Enumerators recur with escalating paperwork |
+| B7 | Stance system | Open / Hurried / Quiet Step; patrol-perception groundwork *(Quiet Step shipped early — retrofits Act 1 rituals)* |
+| B8 | Elevation + hop traversal | z-level tiles, step/ladder tiles; debuts on Miedźno terraces |
+| B9 | Charm economy | Poppy-seed charm collectibles + barter hooks; observation flavor-line sweep |
 
 ## Phase C — Act 2 *(3–5 sessions)*
 
