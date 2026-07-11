@@ -314,6 +314,83 @@ const TOWNS = {
         prompt: "[E] Enter Baba's house",
         requires: () => gameState.babaMetOnce },
     ],
+    // Roads out — travel triggers (LBA persistent world). The east road
+    // opens once Act 1's ending has played.
+    travels: [
+      { x: 22, y: 11.5, radius: 1.4, to: 'miedzno',
+        prompt: '[E] Take the east road to Miedźno',
+        spawn: { x: 1.5, y: 11.5 },
+        line: 'The road east has been waiting. Roads do that.',
+        requires: () => gameState.act1Complete },
+    ],
+  },
+
+  // ── MIEDŹNO — stub (full town lands in Phase C per TOWN2_BRIEF) ────
+  miedzno: {
+    id: 'miedzno',
+    name: 'Miedźno',
+    subtitle: 'The Copper Hill',
+    size: 24,
+    map: (() => {
+      const N = 24, g = [];
+      for (let y = 0; y < N; y++) { g[y] = []; for (let x = 0; x < N; x++) g[y][x] = 0; }
+      for (let x = 0; x < N; x++) { g[11][x] = 1; g[12][x] = 1; }   // west-east road
+      for (let i = 0; i < 5; i++) g[10][6 + i * 3] = 4;              // mud patches
+      return g;
+    })(),
+    houses: [],
+    shrines: [],
+    markers: [],
+    journalHeader: 'M I E D Ź N O',
+    pageNumeral: 'II.',
+    interiors: {}, patrols: [], checkpoints: [], charms: [], zLevels: null,
+    doors: [],
+    travels: [
+      { x: 1.5, y: 11.5, radius: 1.4, to: 'wyrdow',
+        prompt: '[E] Take the west road home to Wyrdów',
+        spawn: { x: 21.5, y: 11.5 },
+        line: 'The road west smells of woodsmoke and thread.' },
+    ],
+    // Stub scenery until Phase C builds the real town: pines, the zinc
+    // barrier, and a Regency notice that says exactly what it is
+    dress(scene) {
+      const off = scene.worldOffset;
+      const g = scene.add.graphics();
+      // Pines flanking the road
+      const pines = [[4, 8], [7, 9.2], [10, 8.4], [14, 9], [18, 8.6],
+                     [5, 14.6], [9, 15], [13, 14.4], [17, 15.2], [20, 14.8]];
+      pines.forEach(([px, py]) => {
+        const iso = cartToIso(px, py);
+        const wx = iso.x + off.x, wy = iso.y + off.y;
+        g.fillStyle(0x000000, 0.3); g.fillEllipse(wx, wy + 2, 18, 5);
+        g.fillStyle(0x1e2e1a, 1);
+        g.fillTriangle(wx, wy - 44, wx - 12, wy - 6, wx + 12, wy - 6);
+        g.fillStyle(0x27391f, 1);
+        g.fillTriangle(wx, wy - 46, wx - 9, wy - 20, wx + 9, wy - 20);
+        g.fillStyle(0x16200f, 1); g.fillRect(wx - 2, wy - 6, 4, 7);
+      });
+      scene.groundLayer.add(g);
+      // Zinc barrier across the road, far east — cold, clean, metallic
+      const bIso = cartToIso(21, 11.5);
+      const b = scene.add.graphics();
+      const bx = bIso.x + off.x, by = bIso.y + off.y;
+      b.fillStyle(0x000000, 0.3); b.fillEllipse(bx, by + 4, 60, 8);
+      b.fillStyle(0x8a92a0, 1); b.fillRect(bx - 34, by - 18, 68, 6);
+      b.fillStyle(0xa8b0bc, 1); b.fillRect(bx - 34, by - 18, 68, 2);
+      b.fillStyle(0x6a7280, 1);
+      b.fillRect(bx - 32, by - 12, 4, 14); b.fillRect(bx + 28, by - 12, 4, 14);
+      b.fillStyle(0x5a3a70, 0.9); b.fillRect(bx - 10, by - 17, 20, 4); // bruised-purple stripe
+      b._sortY = by;
+      scene.objectLayer.add(b);
+      // The notice
+      const note = scene.add.text(bx, by - 34,
+        'ROAD CLOSED BY ORDER OF THE REGENCY\n(Miedźno opens in Act 2)', {
+        fontFamily: 'monospace', fontSize: '9px', color: '#c8ccd4',
+        align: 'center', stroke: '#14141e', strokeThickness: 3,
+      }).setOrigin(0.5, 1).setDepth(600);
+      scene.objectLayer.add(note);
+      note._sortY = by - 1;
+    },
   },
 
   // ── INTERIOR: Baba Elżbieta's house ────────────────────────────────
@@ -553,9 +630,50 @@ const gameState = {
 const SAVE_KEY = 'wyrdow_save';
 const SETTINGS_KEY = 'wyrdow_settings';
 
+// ── Save v2: town-scoped state namespacing ──────────────────────────
+// The flat fields on gameState are the ACTIVE town's working state.
+// stashTownState() copies them into gameState.towns[<town>] before a
+// save or a journey; loadTownState() restores them on arrival. Interiors
+// share their parent town's namespace.
+const TOWN_SCOPED_FIELDS = [
+  'markersFound', 'observedZones', 'worldItemsTaken', 'perimeterHits',
+  'domovoiSequence', 'memoryFragments', 'ritualState', 'ezraState',
+  'domovoiState', 'dziadekState', 'martaState', 'knotsPlaced',
+  'questActive', 'questComplete', 'codexFragmentCollected', 'babaMetOnce',
+  'knotsGiven', 'zuzkaMetOnce', 'zuzkaSecondTalk', 'zuzkaFarewellDone',
+  'firstVillageEntry',
+];
+function townKeyOf(townId) {
+  const def = TOWNS[townId || gameState.currentTown || 'wyrdow'];
+  if (def && def.isInterior && def.exit) return def.exit.to; // parent town
+  return def ? def.id : 'wyrdow';
+}
+function stashTownState() {
+  if (!gameState.towns) gameState.towns = {};
+  const key = townKeyOf();
+  const bucket = {};
+  TOWN_SCOPED_FIELDS.forEach(f => {
+    bucket[f] = JSON.parse(JSON.stringify(gameState[f] === undefined ? null : gameState[f]));
+  });
+  gameState.towns[key] = bucket;
+}
+function loadTownState(townId) {
+  if (!gameState.towns) gameState.towns = {};
+  const key = townKeyOf(townId);
+  const bucket = gameState.towns[key];
+  if (!bucket) return; // fresh town — flat fields keep their defaults
+  TOWN_SCOPED_FIELDS.forEach(f => {
+    if (bucket[f] !== null && bucket[f] !== undefined) {
+      gameState[f] = JSON.parse(JSON.stringify(bucket[f]));
+    }
+  });
+}
+
 function saveGame() {
   try {
+    stashTownState(); // keep the active town's namespace current
     const snap = JSON.parse(JSON.stringify(gameState));
+    snap.saveVersion = 2;
     snap._savedAt = Date.now();
     localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
     gameState.hasSave = true;
@@ -572,6 +690,15 @@ function loadGame() {
     if (!gameState.journal.entries) gameState.journal.entries = [];
     if (!gameState.journal.unread) gameState.journal.unread = [];
     if (!gameState.worldItemsTaken) gameState.worldItemsTaken = [];
+    // Save v2 migration: v1 saves had no town namespaces — the flat
+    // fields ARE Wyrdów's state, so stash them under 'wyrdow'
+    if (!snap.saveVersion || !gameState.towns) {
+      gameState.towns = gameState.towns || {};
+      const wasTown = gameState.currentTown;
+      gameState.currentTown = 'wyrdow';
+      stashTownState();
+      gameState.currentTown = wasTown || 'wyrdow';
+    }
     // MARKERS is a module const — rebuild its placed flags from the save
     // (they were previously never restored: knots were re-placeable and
     // visions replayed after every reload)
@@ -2127,25 +2254,32 @@ class GameScene extends Phaser.Scene {
 
     this.drawGround();
     this.drawAllHouses();
-    this.drawStrawIronIdol();
-    this.drawWaysideShrines();
-    this.drawVillageWell();
-    this.drawSignposts();
-    this.drawScatterDetails();
-    this.drawMarkers();
-    this.createBabaElzbieta();
-    // FIX 1 — initialise Zuzka auto-approach flags so cold-state checks
-    // (e.g. cancelZuzkaApproach, the firstVisit guard) never read undefined.
-    this._zuzkaApproaching = false;
-    this._zuzkaApproachQueued = false;
-    this._zuzkaApproachTween = null;
-    this._zuzkaApproachOrigin = null;
-    this.createZuzka();
-    this.createEzra();
-    this.createMarta();
-    this.createDziadek();
-    this.drawAbandonedInnDetails();
-    this.createBackgroundVillagers();
+    // ── Wyrdów-specific world: idol, shrines, quest, the whole cast ──
+    const isWyrdow = this.town.id === 'wyrdow';
+    if (isWyrdow) {
+      this.drawStrawIronIdol();
+      this.drawWaysideShrines();
+      this.drawVillageWell();
+      this.drawSignposts();
+      this.drawScatterDetails();
+      this.drawMarkers();
+      this.createBabaElzbieta();
+      // FIX 1 — initialise Zuzka auto-approach flags so cold-state checks
+      // (e.g. cancelZuzkaApproach, the firstVisit guard) never read undefined.
+      this._zuzkaApproaching = false;
+      this._zuzkaApproachQueued = false;
+      this._zuzkaApproachTween = null;
+      this._zuzkaApproachOrigin = null;
+      this.createZuzka();
+      this.createEzra();
+      this.createMarta();
+      this.createDziadek();
+      this.drawAbandonedInnDetails();
+      this.createBackgroundVillagers();
+    } else if (this.town.dress) {
+      // Non-Wyrdów towns dress themselves (stub scenery until Phase C)
+      this.town.dress(this);
+    }
     this.createPlayer();
     // Returning from an interior (or travelling): spawn where the door says
     if (this._spawnOverride) {
@@ -2154,7 +2288,7 @@ class GameScene extends Phaser.Scene {
     }
     this.createLightPools();
     this.initAmbientParticles();
-    this.createCreatures();
+    if (isWyrdow) this.createCreatures();
 
     this.drawAtmosphere();
     this.createDialogueUI();
@@ -2174,8 +2308,10 @@ class GameScene extends Phaser.Scene {
     };
     this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.observeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.O);
-    this.setupObservationZones();
-    this.setupRituals();
+    if (isWyrdow) {
+      this.setupObservationZones();
+      this.setupRituals();
+    }
     // Number keys for dialogue choices
     this.choiceKeys = [
       this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
@@ -2270,7 +2406,7 @@ class GameScene extends Phaser.Scene {
 
     // ── Continue restore — rebuild visual quest state from the save ──
     // (markers, hand glow, and the knot HUD previously reset on reload)
-    if (!this.firstVisit && gameState.knotsGiven) {
+    if (isWyrdow && !this.firstVisit && gameState.knotsGiven) {
       try {
         MARKERS.forEach((m, i) => {
           m.placed = (gameState.markersFound || []).includes(m.id);
@@ -2410,15 +2546,17 @@ class GameScene extends Phaser.Scene {
     };
 
     // Map centre (in cells) used for radial darkening.
-    const cxCell = CENTER, cyCell = CENTER;
-    const maxDist = Math.sqrt(2) * (MAP_SIZE * 0.5);
+    const grid = (this.town && this.town.map) || map;
+    const N = (this.town && this.town.size) || MAP_SIZE;
+    const cxCell = N / 2, cyCell = N / 2;
+    const maxDist = Math.sqrt(2) * (N * 0.5);
 
-    for (let y = 0; y < MAP_SIZE; y++) {
-      for (let x = 0; x < MAP_SIZE; x++) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
         const iso = cartToIso(x, y);
         const px = iso.x + this.worldOffset.x;
         const py = iso.y + this.worldOffset.y;
-        const cell = map[y][x];
+        const cell = grid[y][x];
         const key = pickKey(cell, x, y);
         const tile = this.add.image(px, py, key).setOrigin(0.5, 0.5);
         // Radial darkening: tiles further from the idol read ~20%
@@ -2569,7 +2707,7 @@ class GameScene extends Phaser.Scene {
   }
 
   // ── HOUSES (Enhanced) ─────────────────────────────────────────────
-  drawAllHouses() { houses.forEach(h => this.drawHouse(h)); }
+  drawAllHouses() { ((this.town && this.town.houses) || houses).forEach(h => this.drawHouse(h)); }
 
   // ── ABANDONED INN DETAILS ────────────────────────────────────────
   // The Elder house at (6,9) becomes the Domovoi's inn. We overlay
@@ -5683,6 +5821,24 @@ class GameScene extends Phaser.Scene {
   //  An interior is a small TownDefinition; the village systems (rituals,
   //  NPCs, quests, weather) simply don't exist in here.
   // ═══════════════════════════════════════════════════════════════════
+  // Leave town by road — stash this town's state, play the walking
+  // vignette, arrive with the destination's namespace loaded.
+  _travelTo(tr) {
+    if (this._transitioning) return;
+    this._transitioning = true;
+    try { stashTownState(); saveGame(); } catch (e) {}
+    if (typeof music !== 'undefined') {
+      try { music.stopAmbient(600); } catch (e) {}
+    }
+    this.cameras.main.fadeOut(500, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('TravelScene', {
+        to: tr.to, spawn: tr.spawn, line: tr.line || '',
+        toName: (TOWNS[tr.to] && TOWNS[tr.to].name) || tr.to,
+      });
+    });
+  }
+
   _enterInterior(townId) {
     if (this._transitioning) return;
     this._transitioning = true;
@@ -9416,13 +9572,16 @@ class GameScene extends Phaser.Scene {
     // Interiors run their own compact loop — none of the village systems
     if (this.town && this.town.isInterior) { this.updateInterior(time, delta); return; }
     this.animTime = time;
-    this.updateCreatures(time, delta);
-    this.updateAwakeningHooks(delta);
-    this.updateMarkerGlows(time);
-    this.updateObservation(delta);
-    this.updateRituals(time, delta);
-    this.updateBackgroundVillagers(time, delta);
-    this.updateMarkProximity();
+    const isWyrdow = this.town.id === 'wyrdow';
+    if (isWyrdow) {
+      this.updateCreatures(time, delta);
+      this.updateAwakeningHooks(delta);
+      this.updateMarkerGlows(time);
+      this.updateObservation(delta);
+      this.updateRituals(time, delta);
+      this.updateBackgroundVillagers(time, delta);
+      this.updateMarkProximity();
+    }
     this.updateGameClock(delta);
 
     // Animate grass sway
@@ -9584,15 +9743,20 @@ class GameScene extends Phaser.Scene {
     }
 
     this.handleMovement(delta);
-    this.updateThreadGuidance(time, delta);
-    this.updateRegencyTells();
+    this.updateFootsteps();
+    if (isWyrdow) {
+      this.updateThreadGuidance(time, delta);
+      this.updateRegencyTells();
+    }
     this.updatePlayerPosition();
     this.updateEzra(time, delta);
     this.updateMarta(time, delta);
     this.updateDziadek(time, delta);
     this.updateInnSmoke(time, delta);
-    this.checkZuzkaAutoApproach();
-    this.checkBrelTrigger();
+    if (isWyrdow) {
+      this.checkZuzkaAutoApproach();
+      this.checkBrelTrigger();
+    }
     this.handleInteraction();
     this.updateCamera();
     this.sortObjects();
@@ -9849,6 +10013,31 @@ class GameScene extends Phaser.Scene {
         }
         return;
       }
+    }
+    // ── Roads out — travel triggers (same pattern as doors) ──
+    const travels = (this.town && this.town.travels) || [];
+    for (const tr of travels) {
+      if (tr.requires && !tr.requires()) continue;
+      const td = Math.hypot(this.playerCartX - tr.x, this.playerCartY - tr.y);
+      if (td <= tr.radius) {
+        const tIso = cartToIso(tr.x, tr.y);
+        this.interactPrompt.setText(tr.prompt);
+        this.interactPrompt.setPosition(
+          tIso.x + this.worldOffset.x,
+          tIso.y + this.worldOffset.y - 34
+        );
+        this.interactPrompt.setVisible(true);
+        if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+          this.interactPrompt.setVisible(false);
+          this._travelTo(tr);
+        }
+        return;
+      }
+    }
+    // Beyond doors/travel, everything below is Wyrdów's cast + quest
+    if (this.town.id !== 'wyrdow') {
+      if (this.interactPrompt) this.interactPrompt.setVisible(false);
+      return;
     }
     // Check Baba proximity
     const bdx = this.playerCartX - BABA.cartX;
@@ -10494,6 +10683,30 @@ class GameScene extends Phaser.Scene {
     return h >= 19 || h < 5;
   }
 
+  // Footstep SFX — crossfade by tile type. Generic across towns.
+  updateFootsteps() {
+    const moving = this.cursors && (this.cursors.up.isDown || this.cursors.down.isDown
+      || this.cursors.left.isDown || this.cursors.right.isDown);
+    const fsGrid = (this.town && this.town.map) || map;
+    const fsN = (this.town && this.town.size) || MAP_SIZE;
+    const tx = Math.max(0, Math.min(fsN - 1, Math.round(this.playerCartX)));
+    const ty = Math.max(0, Math.min(fsN - 1, Math.round(this.playerCartY)));
+    const tile = (fsGrid[ty] && fsGrid[ty][tx]) || 0;
+    const onRoad = (tile === 1 || tile === 2 || tile === 5);
+    // Quiet Step makes no footstep sound at all — that's the point
+    const canWalk = moving && !this.dialogueActive && !this.visionActive
+      && !this._paused && !this._stanceQuiet;
+    if (canWalk) {
+      if (onRoad) {
+        try { sfx.loop('footsteps_dirt', 1, 250); sfx.stopLoop('footsteps_grass', 250); } catch (e) {}
+      } else {
+        try { sfx.loop('footsteps_grass', 1, 250); sfx.stopLoop('footsteps_dirt', 250); } catch (e) {}
+      }
+    } else {
+      try { sfx.stopLoop('footsteps_dirt', 200); sfx.stopLoop('footsteps_grass', 200); } catch (e) {}
+    }
+  }
+
   updateRituals(time, delta) {
     if (!this._perimeterWaypoints) return;
 
@@ -10523,25 +10736,6 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Footstep SFX — crossfade by tile type ──
-    {
-      const tx = Math.max(0, Math.min(MAP_SIZE - 1, Math.round(px)));
-      const ty = Math.max(0, Math.min(MAP_SIZE - 1, Math.round(py)));
-      const tile = (map[ty] && map[ty][tx]) || 0;
-      const onRoad = (tile === 1 || tile === 2 || tile === 5);
-      // Quiet Step makes no footstep sound at all — that's the point
-      const canWalk = moving && !this.dialogueActive && !this.visionActive
-        && !this._paused && !this._stanceQuiet;
-      if (canWalk) {
-        if (onRoad) {
-          try { sfx.loop('footsteps_dirt', 1, 250); sfx.stopLoop('footsteps_grass', 250); } catch (e) {}
-        } else {
-          try { sfx.loop('footsteps_grass', 1, 250); sfx.stopLoop('footsteps_dirt', 250); } catch (e) {}
-        }
-      } else {
-        try { sfx.stopLoop('footsteps_dirt', 200); sfx.stopLoop('footsteps_grass', 200); } catch (e) {}
-      }
-    }
 
     // Ritual checks stop here while any overlay/cutscene owns the input.
     // (Footstep handling above must keep running so loops stop cleanly.)
@@ -12524,6 +12718,119 @@ class OpeningScene extends Phaser.Scene {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// TRAVEL SCENE — the road between towns ("the roads remember")
+// A short walking vignette: dark pines drifting past, footsteps, one
+// line of text. Arrives with the destination town's namespace loaded.
+// ─────────────────────────────────────────────────────────────────────
+class TravelScene extends Phaser.Scene {
+  constructor() { super('TravelScene'); }
+
+  init(data) {
+    this._to = (data && data.to) || 'wyrdow';
+    this._spawn = (data && data.spawn) || null;
+    this._line = (data && data.line) || '';
+    this._toName = (data && data.toName) || '';
+  }
+
+  create() {
+    const cam = this.cameras.main;
+    const W = cam.width, H = cam.height;
+    cam.setBackgroundColor(0x0a0a12);
+    cam.fadeIn(500, 0, 0, 0);
+
+    // Ground band
+    const road = this.add.graphics();
+    road.fillStyle(0x241a10, 1); road.fillRect(0, H * 0.72, W, H * 0.28);
+    road.fillStyle(0x3a2c1c, 1); road.fillRect(0, H * 0.72, W, 6);
+    // Wheel ruts
+    road.fillStyle(0x1a120a, 0.8);
+    road.fillRect(0, H * 0.80, W, 3);
+    road.fillRect(0, H * 0.88, W, 3);
+
+    // Two parallax pine bands (drawn wider than screen, scrolled in update)
+    this._bands = [];
+    [[0.45, 0x10160e, 0.030], [0.58, 0x182013, 0.055]].forEach(([yF, col, speed]) => {
+      const band = this.add.graphics();
+      const baseY = H * yF + 40;
+      for (let x = -100; x < W + 300; x += 70 + ((x * 37) % 50)) {
+        const h = 60 + ((x * 61) % 70);
+        band.fillStyle(col, 1);
+        band.fillTriangle(x, baseY - h, x - 26, baseY, x + 26, baseY);
+        band.fillTriangle(x, baseY - h - 18, x - 18, baseY - h * 0.45, x + 18, baseY - h * 0.45);
+      }
+      this._bands.push({ g: band, speed, width: W + 400 });
+    });
+
+    // The walking traveller — small silhouette with a hand-mark glow
+    const px = W * 0.32, py = H * 0.79;
+    this._walker = this.add.graphics();
+    this._walkerPos = { x: px, y: py };
+
+    // The travel line, italic, centred
+    if (this._line) {
+      const line = this.add.text(W / 2, H * 0.22, this._line, {
+        fontFamily: 'Georgia, serif', fontSize: '16px', fontStyle: 'italic',
+        color: '#c8b878',
+      }).setOrigin(0.5).setAlpha(0);
+      line.setResolution(window.devicePixelRatio || 1);
+      this.tweens.add({ targets: line, alpha: 0.9, duration: 1200, delay: 800 });
+    }
+    // Destination whisper
+    const dest = this.add.text(W / 2, H * 0.30, '— ' + this._toName + ' —', {
+      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#6a5a40',
+    }).setOrigin(0.5).setAlpha(0);
+    dest.setResolution(window.devicePixelRatio || 1);
+    this.tweens.add({ targets: dest, alpha: 0.8, duration: 1200, delay: 1600 });
+
+    // Footsteps on the road
+    music.bind(this); sfx.bind(this);
+    try { sfx.loop('footsteps_dirt', 0.8, 400); } catch (e) {}
+
+    // Arrival after ~6.5s
+    this._elapsed = 0;
+    this.time.delayedCall(6500, () => {
+      try { sfx.stopLoop('footsteps_dirt', 500); } catch (e) {}
+      cam.fadeOut(600, 0, 0, 0);
+      cam.once('camerafadeoutcomplete', () => {
+        gameState.currentTown = this._to;
+        try { loadTownState(this._to); saveGame(); } catch (e) {}
+        this.scene.start('GameScene', { firstVisit: false, spawn: this._spawn });
+      });
+    });
+  }
+
+  update(time, delta) {
+    // Pines drift right-to-left; the walker bobs in place
+    for (const b of this._bands) {
+      b.g.x -= b.speed * delta;
+      if (b.g.x < -400) b.g.x += 400;
+    }
+    const w = this._walker, p = this._walkerPos;
+    if (!w) return;
+    const t = (this._elapsed += delta);
+    const bob = Math.abs(Math.sin(t * 0.008)) * 3;
+    const stride = Math.sin(t * 0.008);
+    w.clear();
+    // Shadow
+    w.fillStyle(0x000000, 0.4); w.fillEllipse(p.x, p.y + 14, 18, 4);
+    // Legs mid-stride
+    w.fillStyle(0x14141c, 1);
+    w.fillRect(p.x - 4 + stride * 3, p.y + 2 - bob, 3, 12 + bob);
+    w.fillRect(p.x + 1 - stride * 3, p.y + 2 - bob, 3, 12 + bob);
+    // Body + satchel
+    w.fillStyle(0x1e1e2a, 1); w.fillRect(p.x - 5, p.y - 14 - bob, 10, 17);
+    w.fillStyle(0x2a2438, 1); w.fillRect(p.x + 3, p.y - 8 - bob, 4, 6);
+    // Head
+    w.fillStyle(0x2a2a38, 1); w.fillRect(p.x - 4, p.y - 22 - bob, 8, 8);
+    // The mark — one warm pixel swinging with the free hand
+    w.fillStyle(0xffc878, 0.9);
+    w.fillRect(p.x - 7 - stride * 2, p.y - 4 - bob, 2, 2);
+    w.fillStyle(0xffc878, 0.25);
+    w.fillCircle(p.x - 6 - stride * 2, p.y - 3 - bob, 5);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // MAIN MENU SCENE — first scene the player sees
 // ─────────────────────────────────────────────────────────────────────
 class MainMenuScene extends Phaser.Scene {
@@ -13431,7 +13738,7 @@ const config = {
   width: window.innerWidth,
   height: window.innerHeight,
   backgroundColor: 0x000000,
-  scene: [MainMenuScene, OpeningScene, GameScene],
+  scene: [MainMenuScene, OpeningScene, GameScene, TravelScene],
   scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
 };
 const game = new Phaser.Game(config);
