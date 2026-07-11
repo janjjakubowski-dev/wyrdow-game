@@ -2376,13 +2376,13 @@ class GameScene extends Phaser.Scene {
     this.walkBob = 0;
     this.isWalking = false;
 
-    // HUD
-    this.add.text(16, 16, 'W Y R D Ó W', {
+    // HUD — reads the active town (was hardcoded to Wyrdów)
+    this.add.text(16, 16, (this.town.journalHeader || this.town.name || '').toUpperCase(), {
       fontFamily: 'Georgia, "Times New Roman", serif',
       fontSize: '28px', color: '#8a7a50',
       stroke: '#0e0e14', strokeThickness: 5,
     }).setScrollFactor(0).setDepth(1000);
-    this.add.text(16, 50, 'The Crossroads Village', {
+    this.add.text(16, 50, this.town.subtitle || '', {
       fontFamily: 'Georgia, serif',
       fontSize: '14px', color: '#6a5a40',
       stroke: '#0e0e14', strokeThickness: 3,
