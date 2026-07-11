@@ -70,17 +70,25 @@ confiscation, and lost time — consequences without a game-over screen.
 The current engine hardwires one 24×24 map in globals (`map[]`, `houses`, `shrines`,
 `MARKERS`, NPC constants). Towns must become **data** before town 2 can exist.
 
-| # | Task | Notes |
+| # | Task | Status |
 |---|------|-------|
-| B1 | `TownDefinition` schema | Map layout, palette, houses, shrines, NPC registry, markers, ambient set, time-window events — all as data inside the single HTML file. **Schema includes: interiors (small TownDefinitions + door triggers), tile z-levels, patrol routes, checkpoint/permit gates, charm spawns** |
-| B2 | World loader | GameScene builds from the active TownDefinition; clean teardown on travel; door transitions for interiors |
-| B3 | Travel interstitial | Road-walking vignette between towns — "the roads remember" motif |
-| B4 | Save format v2 + migration | Per-town state namespaces; never break existing saves |
-| B5 | Journal town sections | Section headers + roman-numeral pages II–V (already anticipated in UI) |
-| B6 | Cross-town Regency | Attention persists; Enumerators recur with escalating paperwork |
-| B7 | Stance system | Open / Hurried / Quiet Step; patrol-perception groundwork *(Quiet Step shipped early — retrofits Act 1 rituals)* |
-| B8 | Elevation + hop traversal | z-level tiles, step/ladder tiles; debuts on Miedźno terraces |
-| B9 | Charm economy | Poppy-seed charm collectibles + barter hooks; observation flavor-line sweep |
+| B1 | `TownDefinition` schema (incl. interiors, doors, travels, z-level/patrol/checkpoint/charm fields) | ✅ Shipped — Wyrdów + Baba's-house interior + Miedźno stub as data |
+| B2 | World loader | ✅ Core shipped — ground/houses/collision/footsteps town-driven; Wyrdów systems town-gated; interiors have their own build/update path. *Remaining: per-town palettes, teardown audit* |
+| B3 | Travel interstitial | ✅ Shipped — TravelScene road vignette; east road gated on act1Complete; Miedźno round-trip |
+| B4 | Save format v2 + migration | ✅ Shipped — towns[] namespaces (21 fields), interior→parent mapping, v1 migration. *Remaining: per-town fresh-state defaults* |
+| B5 | Journal town sections | ⬜ Journal still renders Wyrdów header only — wire to town defs |
+| B6 | Cross-town Regency | ⬜ Attention already persists (global); Enumerator recurrence with Miedźno build |
+| B7 | Stance system | ✅ Quiet Step shipped (Q); patrol perception lands with Act 2 patrols |
+| B8 | Elevation + hop traversal | ⬜ Debuts on Miedźno terraces (Phase C) |
+| B9 | Charm economy | ⬜ With Miedźno build |
+
+**Interiors shipped beyond plan:** Baba's house enterable (door on her front face,
+gated on having met her), furnished, five examine points, the covered-frame journal
+discovery, and Baba home after dusk — the first NPC daily routine.
+
+⚠ **Runtime verification pending** for the travel/save-v2 batch (`42e634f`) — syntax
+verified via JavaScriptCore; run the preview flow (Wyrdów → east road → Miedźno stub →
+home) before deploying.
 
 ## Phase C — Act 2 *(3–5 sessions)*
 
