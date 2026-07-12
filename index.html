@@ -6856,6 +6856,8 @@ class GameScene extends Phaser.Scene {
       // Zuzka's fireflies notice the conversation
       if (/Zuzka/.test(spk)) this._zuzkaJarFlare = 2200;
     } catch (e) {}
+    // Woodcut portrait beside the box (named cast only)
+    try { this._showSpeakerPortrait(name || ''); } catch (e) {}
     this.dialogueLines = lines;
     this.dialogueIndex = 0;
     this.dialogueOnClose = onClose || null;
@@ -8095,8 +8097,251 @@ class GameScene extends Phaser.Scene {
     gameState.journal.selectedEntry = id;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  //  WOODCUT PORTRAITS — a carved face beside the dialogue box.
+  //  Style: bold ink contours + hatched shading on parchment, one accent
+  //  colour per character ("folk illustration damaged by rain").
+  // ═══════════════════════════════════════════════════════════════════
+  _showSpeakerPortrait(name) {
+    const key = /Baba/.test(name) ? 'baba'
+      : /Zuzka/.test(name) ? 'zuzka'
+      : /Ezra/.test(name) ? 'ezra'
+      : /Ibbur/.test(name) ? 'ibbur'
+      : /Marta/.test(name) ? 'marta'
+      : /Dziadek|Józef/.test(name) ? 'dziadek'
+      : /Brel|Officer/.test(name) ? 'brel'
+      : null;
+    if (!key) { if (this._portraitC) this._portraitC.setVisible(false); return; }
+
+    const cam = this.cameras.main;
+    const panelH = this.dialogueStyle === 'simple' ? 114 : 132;
+    const px = 78, py = cam.height - panelH - 14 - 40; // floats over the box's left corner
+    if (!this._portraitC) {
+      this._portraitC = this.add.container(0, 0).setScrollFactor(0).setDepth(1002);
+      this._portraitG = this.add.graphics();
+      this._portraitC.add(this._portraitG);
+    }
+    this._portraitC.setPosition(px, py);
+    this._portraitC.setVisible(true);
+    const g = this._portraitG;
+    g.clear();
+
+    // ── The carved frame ──
+    g.fillStyle(0x000000, 0.5); g.fillRect(-31, -28, 62, 62);       // drop shadow
+    g.fillStyle(0x1a0e08, 1);   g.fillRect(-33, -32, 64, 64);       // dark wood
+    g.fillStyle(0xd8c8a0, 1);   g.fillRect(-29, -28, 56, 56);       // parchment
+    g.lineStyle(1, 0x8a6a3a, 0.9); g.strokeRect(-27, -26, 52, 52);  // inner rule
+    // Corner diamonds
+    g.fillStyle(0xc8922a, 1);
+    [[-33, -32], [29, -32], [-33, 30], [29, 30]].forEach(([cx, cy]) => {
+      g.fillTriangle(cx + 2, cy - 2, cx + 5, cy + 1, cx + 2, cy + 4);
+      g.fillTriangle(cx + 2, cy - 2, cx - 1, cy + 1, cx + 2, cy + 4);
+    });
+    // Rain-damage stain on the parchment
+    g.fillStyle(0xb8a67e, 0.5); g.fillEllipse(14, -16, 22, 16);
+
+    const INK = 0x241408;
+    const hatch = (x0, y0, w, h, gap, alpha) => {
+      g.lineStyle(1, INK, alpha === undefined ? 0.35 : alpha);
+      for (let d = -h; d < w; d += gap) {
+        g.beginPath();
+        g.moveTo(x0 + Math.max(0, d), y0 + Math.max(0, -d));
+        g.lineTo(x0 + Math.min(w, d + h), y0 + Math.min(h, h - (d + h - w) > h ? h : (w - d)));
+        g.strokePath();
+      }
+    };
+    const line = (x0, y0, x1, y1, wdt) => {
+      g.lineStyle(wdt || 2, INK, 1);
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.strokePath();
+    };
+    const px2 = (x, y, w, h, col, a) => { g.fillStyle(col, a === undefined ? 1 : a); g.fillRect(x, y, w, h); };
+
+    this['_portrait_' + key](g, line, hatch, px2, INK);
+  }
+
+  // ── BABA — headscarf, storm brows, the unimpressed mouth ──
+  _portrait_baba(g, line, hatch, px2, INK) {
+    px2(-14, -20, 30, 12, 0x3a2e50);              // scarf crown (bruised purple)
+    px2(-16, -12, 6, 22, 0x3a2e50);               // scarf side fall
+    px2(12, -14, 8, 10, 0x4a3a62);                // knot
+    line(-14, -20, 16, -20); line(-16, -10, -10, 12); // scarf contours
+    line(16, -20, 16, -8);
+    // Face block
+    px2(-10, -10, 22, 26, 0xd8c8a0, 0);           // (parchment shows through)
+    line(-10, -10, -10, 12); line(12, -10, 12, 8);
+    line(-10, 12, -2, 18); line(-2, 18, 10, 14); line(10, 14, 12, 8);
+    // Storm brows — heavy single strokes
+    line(-8, -6, 0, -7, 3); line(3, -7, 11, -6, 3);
+    // Eyes: short lids beneath
+    line(-6, -2, -1, -2, 2); line(4, -2, 9, -2, 2);
+    // Nose — one decisive hook
+    line(1, -4, 1, 4, 2); line(1, 4, 4, 5, 2);
+    // The mouth: pressed, slightly down at one corner
+    line(-3, 10, 7, 9, 2); line(-3, 10, -4, 9, 1);
+    // Wrinkle hatching on the cheeks
+    hatch(-9, 2, 6, 6, 3, 0.3); hatch(7, 0, 6, 6, 3, 0.3);
+    // Grey wisp escaping the scarf
+    g.lineStyle(1, 0x8a8274, 1);
+    g.beginPath(); g.moveTo(-11, -12); g.lineTo(-14, -4); g.strokePath();
+    // Accent: madder-red collar band
+    px2(-12, 16, 28, 6, 0x6a2430);
+    line(-12, 16, 16, 16, 1);
+  }
+
+  // ── ZUZKA — round face, uneven braids, eyes that don't look away ──
+  _portrait_zuzka(g, line, hatch, px2, INK) {
+    // Hair crown + two braids, left longer
+    px2(-12, -20, 26, 8, 0x2a1a0e);
+    px2(-15, -14, 6, 26, 0x2a1a0e);               // left braid (long)
+    px2(11, -14, 6, 18, 0x2a1a0e);                // right braid (short)
+    // Braid ties
+    px2(-15, 10, 6, 3, 0x4a5a7a); px2(11, 2, 6, 3, 0x4a5a7a);
+    // Braid weave ticks
+    line(-13, -8, -10, -6, 1); line(-13, 0, -10, 2, 1);
+    line(13, -8, 16, -6, 1); line(13, -2, 16, 0, 1);
+    // Face — rounder contour
+    line(-9, -13, -9, 10); line(11, -13, 11, 8);
+    line(-9, 10, 1, 16); line(1, 16, 11, 8);
+    // Big steady eyes — dots with full outlines (she doesn't look away)
+    g.lineStyle(2, INK, 1); g.strokeCircle(-3, -2, 3); g.strokeCircle(6, -2, 3);
+    g.fillStyle(INK, 1); g.fillCircle(-3, -2, 1.4); g.fillCircle(6, -2, 1.4);
+    // Small nose tick + calm mouth
+    line(1, 3, 2, 5, 1);
+    line(-2, 10, 5, 10, 2);
+    // Fringe strokes
+    line(-8, -13, -6, -10, 1); line(-2, -14, 0, -11, 1); line(5, -14, 7, -11, 1);
+    // Accent: the firefly — one warm dot at her collar
+    px2(-10, 14, 24, 6, 0x4a5a7a);                // patched dress collar
+    g.fillStyle(0xffb347, 1); g.fillCircle(9, 17, 2.4);
+    g.fillStyle(0xffb347, 0.3); g.fillCircle(9, 17, 5.5);
+  }
+
+  // ── EZRA — round cap, wire glasses, the gentle beard ──
+  _portrait_ezra(g, line, hatch, px2, INK) {
+    // Cap
+    px2(-12, -22, 26, 8, 0x4a3a2a);
+    px2(-14, -15, 30, 3, 0x5c4836);               // brim
+    line(-12, -22, 14, -22); line(-14, -13, 16, -13, 1);
+    // Face
+    line(-9, -12, -9, 8); line(11, -12, 11, 8);
+    // Wire glasses — two inked rings and the bridge
+    g.lineStyle(2, INK, 1);
+    g.strokeCircle(-3, -3, 4.5); g.strokeCircle(7, -3, 4.5);
+    g.beginPath(); g.moveTo(1, -3); g.lineTo(3, -3); g.strokePath();
+    g.beginPath(); g.moveTo(-8, -4); g.lineTo(-9, -6); g.strokePath();
+    // Eyes behind — gentle downward looks
+    g.fillStyle(INK, 1); g.fillRect(-4, -3, 2, 1.5); g.fillRect(6, -3, 2, 1.5);
+    // Nose
+    line(2, 0, 2, 4, 2);
+    // Beard — hatched white mass with contour
+    px2(-8, 6, 20, 12, 0xe8e2d0);
+    line(-8, 6, -9, 14, 1); line(12, 6, 13, 14, 1);
+    line(-9, 14, 2, 20, 1); line(2, 20, 13, 14, 1);
+    hatch(-6, 8, 16, 8, 3, 0.25);
+    // The faint smile inside it
+    line(-1, 9, 5, 9, 2);
+    // Accent: copper wire coiled at the collar
+    g.lineStyle(2, 0xb8742c, 1);
+    g.strokeCircle(-10, 18, 3);
+    g.beginPath(); g.moveTo(-7, 18); g.lineTo(-2, 20); g.strokePath();
+  }
+
+  // ── MARTA — orange-red scarf, sharp knowing eyes ──
+  _portrait_marta(g, line, hatch, px2, INK) {
+    px2(-13, -20, 28, 11, 0xc05a20);              // scarf (orange-red)
+    px2(13, -12, 6, 14, 0xc05a20);                // tail over shoulder
+    px2(-13, -10, 4, 8, 0xc05a20);
+    line(-13, -20, 15, -20); line(-13, -9, -9, -12, 1);
+    px2(14, -14, 5, 4, 0xa04818);                 // knot shadow
+    // Face
+    line(-9, -11, -9, 10); line(11, -11, 11, 9);
+    line(-9, 10, 0, 15); line(0, 15, 11, 9);
+    // Sharp eyes — angled lids
+    line(-7, -3, -1, -4, 2); line(3, -4, 9, -3, 2);
+    g.fillStyle(INK, 1); g.fillRect(-5, -3, 2, 2); g.fillRect(5, -3, 2, 2);
+    // Nose + knowing half-smile
+    line(1, -1, 1, 4, 2);
+    line(-2, 9, 6, 8, 2); line(6, 8, 8, 6, 1);
+    // Grey strand
+    g.lineStyle(1, 0x9a8a78, 1);
+    g.beginPath(); g.moveTo(-8, -10); g.lineTo(-11, -2); g.strokePath();
+    // Accent: herb sprig at the collar
+    px2(-11, 14, 26, 6, 0x4a2416);
+    g.fillStyle(0x5e7032, 1);
+    g.fillTriangle(6, 13, 9, 17, 3, 17); g.fillRect(5.5, 17, 1, 3);
+  }
+
+  // ── IBBUR — Marta's face, still; lit slits; pale motes ──
+  _portrait_ibbur(g, line, hatch, px2, INK) {
+    px2(-13, -20, 28, 11, 0x6a6080);              // scarf re-tinted violet-grey
+    px2(13, -12, 6, 14, 0x6a6080);
+    line(-13, -20, 15, -20);
+    line(-9, -11, -9, 10); line(11, -11, 11, 9);
+    line(-9, 10, 0, 15); line(0, 15, 11, 9);
+    // Half-closed slits, lit from inside
+    line(-7, -3, -1, -3, 2); line(3, -3, 9, -3, 2);
+    g.fillStyle(0xffd890, 0.85);
+    g.fillRect(-6, -2.5, 4, 1.5); g.fillRect(4, -2.5, 4, 1.5);
+    // Level mouth — someone else's stillness
+    line(-1, 9, 5, 9, 2);
+    // Shimmer motes drifting off the borrowed body
+    g.fillStyle(0xd8d0f0, 0.8);
+    g.fillCircle(-14, -6, 1.2); g.fillCircle(15, -14, 1); g.fillCircle(13, 12, 1);
+    g.fillStyle(0xd8d0f0, 0.35);
+    g.fillCircle(-12, 8, 2); g.fillCircle(17, -2, 1.6);
+    // Accent: none. The Ibbur borrows even the colour.
+  }
+
+  // ── DZIADEK — flat cap, long beard, the tear glint ──
+  _portrait_dziadek(g, line, hatch, px2, INK) {
+    px2(-13, -20, 28, 7, 0x32302a);               // flat cap
+    px2(-15, -14, 32, 3, 0x403c34);               // brim
+    line(-13, -20, 15, -20); line(-15, -12, 17, -12, 1);
+    // Face — narrow, weathered
+    line(-8, -11, -8, 6); line(10, -11, 10, 6);
+    // Nearly closed eyes — two resting strokes
+    line(-6, -3, -1, -3, 2); line(3, -3, 8, -3, 2);
+    // Nose
+    line(1, -1, 1, 3, 2);
+    // The tear glint — one pale drop under the right eye
+    g.fillStyle(0xc8d8e8, 0.9); g.fillCircle(6, 1, 1.4);
+    // Long beard — hatched, tapering past the frame's heart
+    px2(-7, 5, 18, 16, 0xe8e2d0);
+    line(-7, 5, -9, 15, 1); line(11, 5, 12, 13, 1);
+    line(-9, 15, 2, 24, 1); line(2, 24, 12, 13, 1);
+    hatch(-5, 7, 14, 12, 3, 0.25);
+    // Accent: navy vest edge + lantern-gold fleck
+    px2(-11, 19, 10, 4, 0x2a3a52);
+    g.fillStyle(0xffd890, 1); g.fillCircle(13, 20, 1.6);
+    g.fillStyle(0xffd890, 0.3); g.fillCircle(13, 20, 4);
+  }
+
+  // ── BREL — zinc-grey, precise, the clipboard edge ──
+  _portrait_brel(g, line, hatch, px2, INK) {
+    // Peaked cap, cold and square
+    px2(-12, -22, 26, 7, 0x6a7280);
+    px2(-14, -16, 30, 3, 0x8a92a0);
+    px2(-4, -21, 10, 3, 0x5a3a70);                // bruised-purple band
+    line(-12, -22, 14, -22, 1); line(-14, -14, 16, -14, 1);
+    // Face — longer, symmetrical, unweathered
+    line(-8, -12, -8, 10); line(10, -12, 10, 10);
+    line(-8, 10, 1, 14); line(1, 14, 10, 10);
+    // Eyes: perfectly level. That is the unsettling part.
+    line(-6, -4, -1, -4, 2); line(3, -4, 8, -4, 2);
+    g.fillStyle(INK, 1); g.fillRect(-4, -4, 1.5, 1.5); g.fillRect(5, -4, 1.5, 1.5);
+    // Thin nose, thinner mouth — polite, certain
+    line(1, -2, 1, 4, 1);
+    line(-2, 9, 5, 9, 1);
+    // No hatching. Nothing weathered. Clean-shaven jaw line only.
+    // Accent: the clipboard edge rising into frame
+    px2(6, 14, 14, 10, 0x8a92a0);
+    px2(7, 15, 12, 2, 0xe8e8e0);
+    line(6, 14, 20, 14, 1);
+  }
+
   closeDialogue() {
     this.dialogueActive = false;
+    if (this._portraitC) this._portraitC.setVisible(false);
     this.choiceActive = false;
     if (typeof music !== 'undefined' && /Baba/.test(this.dialogueSpeaker || '')) {
       music.stopBaba();
