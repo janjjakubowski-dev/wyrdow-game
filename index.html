@@ -325,133 +325,255 @@ const TOWNS = {
     ],
   },
 
-  // ── MIEDŹNO — stub (full town lands in Phase C per TOWN2_BRIEF) ────
-  miedzno: {
-    id: 'miedzno',
-    name: 'Miedźno',
-    subtitle: 'The Copper Hill',
-    size: 24,
-    map: (() => {
-      const N = 24, g = [];
-      for (let y = 0; y < N; y++) { g[y] = []; for (let x = 0; x < N; x++) g[y][x] = 0; }
-      for (let x = 0; x < N; x++) { g[11][x] = 1; g[12][x] = 1; }   // west-east road
-      for (let i = 0; i < 5; i++) g[10][6 + i * 3] = 4;              // mud patches
-      return g;
-    })(),
-    houses: [],
-    shrines: [],
-    markers: [],
-    journalHeader: 'M I E D Ź N O',
-    pageNumeral: 'II.',
-    interiors: {}, patrols: [], checkpoints: [], charms: [], zLevels: null,
-    doors: [],
-    travels: [
-      { x: 1.5, y: 11.5, radius: 1.4, to: 'wyrdow',
-        prompt: '[E] Take the west road home to Wyrdów',
-        spawn: { x: 21.5, y: 11.5 },
-        line: 'The road west smells of woodsmoke and thread.' },
-    ],
-    // Stub scenery until Phase C builds the real town: pines, the zinc
-    // barrier, and a Regency notice that says exactly what it is
-    dress(scene) {
-      const off = scene.worldOffset;
-      const g = scene.add.graphics();
-      // Pines flanking the road
-      const pines = [[4, 8], [7, 9.2], [10, 8.4], [14, 9], [18, 8.6],
-                     [5, 14.6], [9, 15], [13, 14.4], [17, 15.2], [20, 14.8]];
-      pines.forEach(([px, py]) => {
-        const iso = cartToIso(px, py);
-        const wx = iso.x + off.x, wy = iso.y + off.y;
-        g.fillStyle(0x000000, 0.3); g.fillEllipse(wx, wy + 2, 18, 5);
-        g.fillStyle(0x1e2e1a, 1);
-        g.fillTriangle(wx, wy - 44, wx - 12, wy - 6, wx + 12, wy - 6);
-        g.fillStyle(0x27391f, 1);
-        g.fillTriangle(wx, wy - 46, wx - 9, wy - 20, wx + 9, wy - 20);
-        g.fillStyle(0x16200f, 1); g.fillRect(wx - 2, wy - 6, 4, 7);
-      });
-      scene.groundLayer.add(g);
-      // Zinc barrier across the road, far east — cold, clean, metallic
-      const bIso = cartToIso(21, 11.5);
-      const b = scene.add.graphics();
-      const bx = bIso.x + off.x, by = bIso.y + off.y;
-      b.fillStyle(0x000000, 0.3); b.fillEllipse(bx, by + 4, 60, 8);
-      b.fillStyle(0x8a92a0, 1); b.fillRect(bx - 34, by - 18, 68, 6);
-      b.fillStyle(0xa8b0bc, 1); b.fillRect(bx - 34, by - 18, 68, 2);
-      b.fillStyle(0x6a7280, 1);
-      b.fillRect(bx - 32, by - 12, 4, 14); b.fillRect(bx + 28, by - 12, 4, 14);
-      b.fillStyle(0x5a3a70, 0.9); b.fillRect(bx - 10, by - 17, 20, 4); // bruised-purple stripe
-      b._sortY = by;
-      scene.objectLayer.add(b);
-      // The notice
-      const note = scene.add.text(bx, by - 34,
-        'ROAD CLOSED BY ORDER OF THE REGENCY\n(Miedźno opens in Act 2)', {
-        fontFamily: 'monospace', fontSize: '9px', color: '#c8ccd4',
-        align: 'center', stroke: '#14141e', strokeThickness: 3,
-      }).setOrigin(0.5, 1).setDepth(600);
-      scene.objectLayer.add(note);
-      note._sortY = by - 1;
-    },
-  },
+  // ── MIEDŹNO — the Copper Hill, v1 topology (Phase C per TOWN2_BRIEF) ──
+  // The hill is not a hill. NE quadrant: the Sleeper's mass with a
+  // switchback terrace path. Town in the crook of its arm. Requisition
+  // Office SW. True z-level traversal lands with B8; v1 walks carved
+  // paths on a blocked hill mass.
+  miedzno: (() => {
+    const N = 24;
+    const g = [];
+    for (let y = 0; y < N; y++) { g[y] = []; for (let x = 0; x < N; x++) g[y][x] = 0; }
+    // West road in (rows 11-12) to the town crook
+    for (let x = 0; x < 17; x++) { g[11][x] = 1; g[12][x] = 1; }
+    // Town lane south from the road
+    for (let y = 13; y < 20; y++) { g[y][13] = 1; g[y][14] = 1; }
+    // The hill mass — NE quadrant, blocked
+    for (let y = 0; y <= 8; y++) for (let x = 13; x < N; x++) g[y][x] = 3;
+    // Switchback terrace path carved into the hill (walkable dirt)
+    for (let x = 14; x <= 21; x++) g[8][x] = 1;
+    for (let y = 6; y <= 8; y++) g[y][21] = 1;
+    for (let x = 15; x <= 21; x++) g[6][x] = 1;
+    for (let y = 4; y <= 6; y++) g[y][15] = 1;
+    for (let x = 15; x <= 20; x++) g[4][x] = 1;
+    // Mud around the crucible yard
+    g[19][5] = 4; g[18][6] = 4; g[20][7] = 4;
+    // House footprints (collision)
+    const H = [
+      { x: 5,  y: 14, w: 2, h: 2, lean: 0.05,  name: 'Lamp House',  chimney: true },
+      { x: 9,  y: 14, w: 3, h: 2, lean: -0.07, name: 'The Ladder',  chimney: true },
+      { x: 6,  y: 17, w: 2, h: 2, lean: 0.08,  name: 'Study House', chimney: false },
+      { x: 10, y: 17, w: 2, h: 2, lean: -0.04, name: 'Bread Kiln',  chimney: true },
+      { x: 3,  y: 20, w: 3, h: 2, lean: 0,     name: 'Requisition Office', chimney: false },
+    ];
+    H.forEach(h => {
+      for (let dy = 0; dy < h.h; dy++)
+        for (let dx = 0; dx < h.w; dx++)
+          if (g[h.y + dy]) g[h.y + dy][h.x + dx] = 3;
+    });
 
-  // ── INTERIOR: Baba Elżbieta's house ────────────────────────────────
-  // An interior is just a small TownDefinition (LBA mandate). One room:
-  // braids on the wall, jar shelves, the covered drawing Zuzka mentioned.
-  baba_house_interior: {
-    id: 'baba_house_interior',
-    name: "Baba Elżbieta's House",
-    subtitle: 'It leans toward what is true',
-    isInterior: true,
-    size: 10,
-    map: (() => {
-      // 10x10 grid: ring of wall (3), floor (0) inside, doorway gap south
-      const g = [];
-      for (let y = 0; y < 10; y++) {
-        g[y] = [];
-        for (let x = 0; x < 10; x++) {
-          g[y][x] = (x === 0 || y === 0 || x === 9 || y === 9) ? 3 : 0;
-        }
-      }
-      g[9][4] = 0; g[9][5] = 0; // doorway
-      return g;
-    })(),
-    entry: { x: 4.5, y: 7.6 },              // spawn just inside the door
-    exit: { x: 4.5, y: 8.6, radius: 0.7,    // step back through the door
-            to: 'wyrdow', spawn: { x: 16.5, y: 12.0 } },
-    // Examine points — LBA's poke-everything density, spoken in the
-    // traveller's voice. The covered frame earns a journal entry.
-    examine: [
-      { x: 7.6, y: 1.9, radius: 1.2, prompt: '[E] The covered frame',
-        name: 'The Covered Frame', journal: 'observe_drawing',
-        lines: [
-          ">You lift the corner of the cloth, the way Zuzka once did.",
-          ">A charcoal drawing of a hand. On the palm, drawn with more care than anything else in this careful house, is your mark.",
-          ">You put the cloth back exactly as you found it. Almost exactly.",
-        ] },
-      { x: 5.8, y: 1.9, radius: 1.2, prompt: '[E] The braids',
-        name: 'The Braid Wall',
-        lines: [
-          ">Seven braids hang from the pegs. Each one is someone's fate, read and kept.",
-          ">One is burnt short. You decide not to ask which year that was.",
-        ] },
-      { x: 2.2, y: 1.9, radius: 1.2, prompt: '[E] The stove',
-        name: 'The Hearth',
-        lines: [
-          ">The ember never quite goes out. Baba says the day it does, she'll finally sleep in.",
-        ] },
-      { x: 5, y: 4.5, radius: 1.1, prompt: '[E] The reading dish',
-        name: 'The Reading Dish',
-        lines: [
-          ">The dish holds fine grey ash. It smells faintly of someone's future.",
-        ] },
-      { x: 7.8, y: 7, radius: 1.1, prompt: '[E] The quilt',
-        name: 'The Quilt',
-        lines: [
-          ">The quilt is pieced from four different lives. The stitching is furious and precise.",
-          ">Stitched Circle work. Nothing wasted, nothing forgotten.",
-        ] },
-    ],
-    babaHomeAtNight: true,   // she sleeps here — village sprite hides after dusk
-  },
+    return {
+      id: 'miedzno',
+      name: 'Miedźno',
+      subtitle: 'The Copper Hill',
+      size: N,
+      map: g,
+      houses: H,
+      shrines: [],
+      markers: [],
+      journalHeader: 'M I E D Ź N O',
+      pageNumeral: 'II.',
+      // Verdigris grade — oxidized copper over everything; no warm centre
+      groundGrade: { r: 0.62, g: 0.86, b: 0.8, warmCenter: false },
+      interiors: {}, patrols: [], checkpoints: [], charms: [], zLevels: null,
+      doors: [],
+      // First voice of the Copper Hill — three examine beats
+      examines: [
+        { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The tear-streak',
+          name: 'The Tear-Streak',
+          lines: [
+            ">The verdigris streak runs from the closed eye, as if the hill has been crying very slowly for a very long time.",
+            ">Up close, the eyelid is not rock. It is clay. And it is warm.",
+          ] },
+        { x: 15.5, y: 9.6, radius: 1.4, prompt: '[E] The offering ledge',
+          name: 'The Offering Ledge',
+          lines: [
+            ">Bread crumbs on a stone ledge by the sealed gate. Someone still tears a crust for the Skarbnik, quota or no quota.",
+          ] },
+        { x: 6, y: 19.2, radius: 1.5, prompt: '[E] The crucible',
+          name: 'The Crucible',
+          lines: [
+            ">The pot is half full of surrendered charms. Copper remembers hands. Melted copper remembers nothing.",
+            ">That is the point of it.",
+          ] },
+      ],
+      travels: [
+        { x: 1.5, y: 11.5, radius: 1.4, to: 'wyrdow',
+          prompt: '[E] Take the west road home to Wyrdów',
+          spawn: { x: 21.5, y: 11.5 },
+          line: 'The road west smells of woodsmoke and thread.' },
+      ],
+      dress(scene) {
+        const off = scene.worldOffset;
+        const at = (cx, cy) => { const i = cartToIso(cx, cy); return { x: i.x + off.x, y: i.y + off.y }; };
+
+        // ── THE SLEEPER — the hill IS a body. Tile-aligned terrace
+        //    bands climb the mass; the clay face in profile crowns it,
+        //    gazing SW across the town in the crook of its arm ──
+        const s = scene.add.graphics();
+        // Terrace bands: three iso strips over the hill rows, each a
+        // parallelogram following the tile grid (not smooth mounds)
+        const band = (rowY, x0, x1, topCol, faceCol, h) => {
+          const a = at(x0, rowY), b = at(x1, rowY);
+          // Face (vertical drop)
+          s.fillStyle(faceCol, 1);
+          s.beginPath();
+          s.moveTo(a.x, a.y); s.lineTo(b.x, b.y);
+          s.lineTo(b.x, b.y - h); s.lineTo(a.x, a.y - h);
+          s.closePath(); s.fillPath();
+          // Top lip highlight
+          s.fillStyle(topCol, 1);
+          s.beginPath();
+          s.moveTo(a.x, a.y - h); s.lineTo(b.x, b.y - h);
+          s.lineTo(b.x + TILE_W / 2, b.y - h - TILE_H / 2);
+          s.lineTo(a.x + TILE_W / 2, a.y - h - TILE_H / 2);
+          s.closePath(); s.fillPath();
+        };
+        band(9, 13, 23.5, 0x5a6a5e, 0x46554c, 26);   // lowest terrace
+        band(7, 14.5, 23.5, 0x64746a, 0x4e5f56, 24); // middle
+        band(5, 15.5, 23.5, 0x6e7f74, 0x56675e, 22); // upper
+        // Copper seams glinting in the terrace faces
+        s.fillStyle(0xb8742c, 0.7);
+        const seams = [[15, 8.7], [18, 8.8], [21, 8.6], [17, 6.8], [20, 6.7], [18, 4.8]];
+        seams.forEach(([sx, sy]) => {
+          const p = at(sx, sy);
+          s.fillRect(p.x - 1, p.y - 14, 2, 8);
+        });
+
+        // The face — one continuous clay PROFILE silhouette resting on
+        // the upper terrace, gazing SW. A single polygon reads as a face
+        // where bolted-on shapes never did.
+        const hd = at(19.5, 2.2);
+        const P = [
+          [-14, -78],  // crown
+          [-44, -66],  // forehead
+          [-48, -50],  // brow ridge
+          [-44, -46],  // bridge dip
+          [-70, -32],  // nose tip
+          [-50, -26],  // under-nose
+          [-56, -18],  // upper lip
+          [-50, -12],  // mouth corner
+          [-58, -6],   // lower lip
+          [-40, 6],    // chin
+          [-10, 14],   // jaw
+          [36, 12],    // jaw back
+          [58, -14],   // ear line
+          [54, -52],   // skull back
+          [24, -74],   // crown back
+        ];
+        s.fillStyle(0x6e7f74, 1);
+        s.beginPath();
+        s.moveTo(hd.x + P[0][0], hd.y + P[0][1]);
+        for (let i = 1; i < P.length; i++) s.lineTo(hd.x + P[i][0], hd.y + P[i][1]);
+        s.closePath(); s.fillPath();
+        // Cheek/jaw shading (kept INSIDE the silhouette)
+        s.fillStyle(0x5c6c62, 0.7);
+        s.fillEllipse(hd.x + 22, hd.y - 22, 56, 58);
+        s.fillStyle(0x76877c, 0.6);
+        s.fillEllipse(hd.x - 26, hd.y - 44, 34, 30); // brow light
+        // The closed eye — a long lid at rest for eleven years
+        s.fillStyle(0x2e3832, 1); s.fillRect(hd.x - 40, hd.y - 40, 26, 4);
+        s.fillStyle(0x232b26, 0.9); s.fillRect(hd.x - 38, hd.y - 36, 22, 2);
+        // Verdigris tear-streak from the eye's outer corner down the cheek
+        s.fillStyle(0x4aa08a, 0.85);
+        s.fillRect(hd.x - 20, hd.y - 36, 5, 28);
+        s.fillRect(hd.x - 18, hd.y - 8, 4, 14);
+        s.fillStyle(0x5ec0a4, 0.55); s.fillRect(hd.x - 19, hd.y - 34, 2, 24);
+        // The scraped forehead — a paler gouge where the truth was
+        s.fillStyle(0x8a9a8e, 1); s.fillRect(hd.x - 40, hd.y - 66, 32, 9);
+        s.fillStyle(0x9aab9e, 0.6); s.fillRect(hd.x - 37, hd.y - 63, 25, 3);
+        s.fillStyle(0x3a463e, 0.5); s.fillRect(hd.x - 40, hd.y - 57, 32, 2);
+        scene.groundLayer.add(s);
+
+        // ── Timber headframe on the second terrace ──
+        const hf = at(21, 5.2);
+        const f = scene.add.graphics();
+        f.fillStyle(0x000000, 0.3); f.fillEllipse(hf.x, hf.y + 2, 30, 7);
+        f.fillStyle(0x3a2c1c, 1);
+        f.fillRect(hf.x - 12, hf.y - 44, 4, 46); f.fillRect(hf.x + 8, hf.y - 44, 4, 46);
+        f.fillRect(hf.x - 14, hf.y - 48, 28, 5);
+        f.lineStyle(2, 0x2c2014, 1);
+        f.beginPath(); f.moveTo(hf.x - 10, hf.y - 40); f.lineTo(hf.x + 10, hf.y - 4); f.strokePath();
+        f.beginPath(); f.moveTo(hf.x + 10, hf.y - 40); f.lineTo(hf.x - 10, hf.y - 4); f.strokePath();
+        // The great wheel
+        f.lineStyle(3, 0x4a3a24, 1); f.strokeCircle(hf.x, hf.y - 52, 9);
+        f.lineStyle(1, 0x4a3a24, 1);
+        f.beginPath(); f.moveTo(hf.x - 9, hf.y - 52); f.lineTo(hf.x + 9, hf.y - 52); f.strokePath();
+        f.beginPath(); f.moveTo(hf.x, hf.y - 61); f.lineTo(hf.x, hf.y - 43); f.strokePath();
+        f._sortY = hf.y;
+        scene.objectLayer.add(f);
+
+        // ── Sealed mine gate at the hill base + the Skarbnik's ledge ──
+        const mg = at(14.5, 9.4);
+        const m = scene.add.graphics();
+        m.fillStyle(0x000000, 0.3); m.fillEllipse(mg.x, mg.y + 3, 40, 8);
+        m.fillStyle(0x3a2c1c, 1); m.fillRect(mg.x - 20, mg.y - 30, 5, 32);
+        m.fillRect(mg.x + 15, mg.y - 30, 5, 32);
+        m.fillRect(mg.x - 22, mg.y - 34, 44, 6);
+        m.fillStyle(0x1a1410, 1); m.fillRect(mg.x - 15, mg.y - 28, 30, 30); // dark mouth
+        m.fillStyle(0x4a3a24, 1); // boards
+        m.fillRect(mg.x - 16, mg.y - 22, 32, 4); m.fillRect(mg.x - 16, mg.y - 12, 32, 4);
+        // Skarbnik shrine ledge with crumbs
+        m.fillStyle(0x544430, 1); m.fillRect(mg.x + 22, mg.y - 12, 14, 3);
+        m.fillStyle(0xc8a468, 1); m.fillRect(mg.x + 25, mg.y - 15, 4, 3);
+        m.fillStyle(0xe8dfc0, 0.6); m.fillRect(mg.x + 30, mg.y - 14, 2, 2);
+        m._sortY = mg.y;
+        scene.objectLayer.add(m);
+
+        // ── West entry checkpoint — zinc, straight lines, polite ──
+        const cp = at(3, 11.5);
+        const c = scene.add.graphics();
+        c.fillStyle(0x000000, 0.3); c.fillEllipse(cp.x, cp.y + 4, 70, 9);
+        // Booth
+        c.fillStyle(0x8a92a0, 1); c.fillRect(cp.x - 30, cp.y - 34, 20, 36);
+        c.fillStyle(0xa8b0bc, 1); c.fillRect(cp.x - 30, cp.y - 34, 20, 3);
+        c.fillStyle(0x2a3040, 0.9); c.fillRect(cp.x - 26, cp.y - 28, 12, 9); // window
+        c.fillStyle(0x5a3a70, 0.9); c.fillRect(cp.x - 30, cp.y - 14, 20, 3); // stripe
+        // Barrier arm across the road
+        c.fillStyle(0x6a7280, 1); c.fillRect(cp.x - 8, cp.y - 16, 4, 18);
+        c.fillStyle(0xa8b0bc, 1); c.fillRect(cp.x - 6, cp.y - 16, 46, 4);
+        c.fillStyle(0x5a3a70, 0.9);
+        c.fillRect(cp.x + 2, cp.y - 16, 6, 4); c.fillRect(cp.x + 16, cp.y - 16, 6, 4); c.fillRect(cp.x + 30, cp.y - 16, 6, 4);
+        c._sortY = cp.y;
+        scene.objectLayer.add(c);
+        const note = scene.add.text(cp.x, cp.y - 44,
+          'PRESENT PERMIT ON ENTRY\n(the office is not receiving — Act 2 under construction)', {
+          fontFamily: 'monospace', fontSize: '9px', color: '#c8ccd4',
+          align: 'center', stroke: '#14141e', strokeThickness: 3,
+        }).setOrigin(0.5, 1).setDepth(600);
+        note._sortY = cp.y - 1;
+        scene.objectLayer.add(note);
+
+        // ── Crucible yard by the Requisition Office — the melting-down ──
+        const cr = at(5.5, 18.8);
+        const q = scene.add.graphics();
+        q.fillStyle(0x000000, 0.3); q.fillEllipse(cr.x, cr.y + 3, 34, 7);
+        q.fillStyle(0x4a4a52, 1); q.fillRect(cr.x - 10, cr.y - 16, 20, 18);
+        q.fillStyle(0x5a5a64, 1); q.fillRect(cr.x - 10, cr.y - 16, 20, 3);
+        q.fillStyle(0xff7b2a, 0.9); q.fillRect(cr.x - 6, cr.y - 12, 12, 4); // melt glow
+        q.fillStyle(0xffc878, 0.18); q.fillCircle(cr.x, cr.y - 10, 16);
+        // The queue's surrendered charms — a sad little pile
+        q.fillStyle(0xb8742c, 0.9);
+        q.fillRect(cr.x + 14, cr.y - 4, 3, 2); q.fillRect(cr.x + 18, cr.y - 6, 2, 3);
+        q.fillRect(cr.x + 16, cr.y - 2, 4, 2);
+        q._sortY = cr.y;
+        scene.objectLayer.add(q);
+
+        // ── Pines on the west approach ──
+        const pg = scene.add.graphics();
+        [[4, 8.6], [7, 9.2], [10, 8.4], [4, 14.6], [8, 15.2]].forEach(([px, py]) => {
+          const p = at(px, py);
+          pg.fillStyle(0x000000, 0.3); pg.fillEllipse(p.x, p.y + 2, 18, 5);
+          pg.fillStyle(0x1c2a20, 1);
+          pg.fillTriangle(p.x, p.y - 44, p.x - 12, p.y - 6, p.x + 12, p.y - 6);
+          pg.fillStyle(0x24342a, 1);
+          pg.fillTriangle(p.x, p.y - 46, p.x - 9, p.y - 20, p.x + 9, p.y - 20);
+          pg.fillStyle(0x141e12, 1); pg.fillRect(p.x - 2, p.y - 6, 4, 7);
+        });
+        scene.groundLayer.add(pg);
+      },
+    };
+  })(),
 };
 function activeTown() {
   return TOWNS[gameState.currentTown || 'wyrdow'] || TOWNS.wyrdow;
@@ -2563,15 +2685,22 @@ class GameScene extends Phaser.Scene {
         // darker so the centre feels like the focal hot-spot.
         // Within ~3 tiles of the idol, leave fully bright.
         const dCell = Math.sqrt((x - cxCell) * (x - cxCell) + (y - cyCell) * (y - cyCell));
+        // Per-town colour grade (B2): each town multiplies its own hue
+        // into the ground — Wyrdów stays warm, Miedźno reads verdigris.
+        const grade = this.town.groundGrade || { r: 1, g: 1, b: 1, warmCenter: true };
+        let mR = 1, mG = 1, mB = 1;
         if (dCell > 3) {
           const t = Math.min(1, (dCell - 3) / (maxDist - 3));
-          const tint = 1 - t * 0.20;
-          const c = Math.round(tint * 255);
-          tile.setTint((c << 16) | (c << 8) | c);
-        } else {
+          const dark = 1 - t * 0.20;
+          mR = dark; mG = dark; mB = dark;
+        } else if (grade.warmCenter) {
           // Inside the warm ring — slight amber tint for extra warmth.
-          tile.setTint(0xfff0d8);
+          mR = 1; mG = 0.94; mB = 0.85;
         }
+        const cr = Math.min(255, Math.round(mR * grade.r * 255));
+        const cg = Math.min(255, Math.round(mG * grade.g * 255));
+        const cb = Math.min(255, Math.round(mB * grade.b * 255));
+        tile.setTint((cr << 16) | (cg << 8) | cb);
         this.groundLayer.add(tile);
 
         // ── Worn edges where dirt road meets grass ─────────────────
@@ -7327,16 +7456,21 @@ class GameScene extends Phaser.Scene {
     // ── LEFT PAGE: Header ──
     const lpx = LEFT_X + 24; // left padding
     const lpy = PAGE_Y + 18;
-    // Diamond rule at top
+    // Diamond rule at top (per-town section headers render in the list)
     this._journalDrawRule(container, LEFT_X + PAGE_W / 2, lpy, PAGE_W - 60);
-    // Town header
-    const townHdr = this.add.text(LEFT_X + PAGE_W / 2, lpy + 18, 'W Y R D \u00d3 W', {
-      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#6a5030',
-    }).setOrigin(0.5, 0.5).setResolution(dpr);
-    container.add(townHdr);
 
     // ── Entry list ──
-    const entries = (gameState.journal.entries || []).filter(id => JOURNAL_ENTRIES[id]);
+    // Group entries by town (B5): Wyrdów first, then the road east.
+    // Within a town, keep collection order.
+    const TOWN_ORDER = ['wyrdow', 'miedzno'];
+    const entries = (gameState.journal.entries || [])
+      .filter(id => JOURNAL_ENTRIES[id])
+      .sort((a, b) => {
+        const ta = TOWN_ORDER.indexOf(JOURNAL_ENTRIES[a].town || 'wyrdow');
+        const tb = TOWN_ORDER.indexOf(JOURNAL_ENTRIES[b].town || 'wyrdow');
+        if (ta !== tb) return ta - tb;
+        return gameState.journal.entries.indexOf(a) - gameState.journal.entries.indexOf(b);
+      });
     const listTop = lpy + 42;
     const listH = PAGE_H - 190; // bottom of page reserved for the Carried section
     const ROW_H = 28;
@@ -7365,7 +7499,11 @@ class GameScene extends Phaser.Scene {
     this._buildJournalCarried(container);
 
     // Page number bottom-left
-    const pageNum = this.add.text(LEFT_X + PAGE_W / 2, PAGE_Y + PAGE_H - 14, 'I.', {
+    const selTown = entries.length
+      ? (JOURNAL_ENTRIES[entries[Math.min(this._journalSelection, entries.length - 1)]].town || 'wyrdow')
+      : 'wyrdow';
+    const pageNum = this.add.text(LEFT_X + PAGE_W / 2, PAGE_Y + PAGE_H - 14,
+      (TOWNS[selTown] && TOWNS[selTown].pageNumeral) || 'I.', {
       fontFamily: 'Georgia, serif', fontSize: '11px', fontStyle: 'italic', color: '#a08860',
     }).setOrigin(0.5, 0.5).setResolution(dpr);
     container.add(pageNum);
@@ -7461,9 +7599,26 @@ class GameScene extends Phaser.Scene {
     const offset = this._journalScrollOffset;
     const max = this._journalMaxVisible;
     const visible = entries.slice(offset, offset + max);
+    let flowY = this._journalListTop;
+    let lastTown = offset > 0
+      ? (JOURNAL_ENTRIES[entries[offset - 1]].town || 'wyrdow') : null;
     visible.forEach((id, i) => {
       const def = JOURNAL_ENTRIES[id]; if (!def) return;
-      const y = this._journalListTop + i * this._journalRowH;
+      // Town section header whenever the group changes in the flow
+      const entryTown = def.town || 'wyrdow';
+      if (entryTown !== lastTown) {
+        lastTown = entryTown;
+        const tDef = TOWNS[entryTown] || {};
+        const hdr = this.add.text(this._journalLeftPageCX, flowY + 6,
+          tDef.journalHeader || entryTown.toUpperCase(), {
+            fontFamily: 'Georgia, serif', fontSize: '12px', color: '#6a5030',
+        }).setOrigin(0.5, 0).setResolution(this._journalDpr);
+        container.add(hdr);
+        this._journalListItems.push(hdr);
+        flowY += 26;
+      }
+      const y = flowY;
+      flowY += this._journalRowH;
       const isSelected = (offset + i === this._journalSelection);
       const isUnread = gameState.journal.unread.includes(id);
       // Selection highlight
@@ -10030,6 +10185,28 @@ class GameScene extends Phaser.Scene {
         if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
           this.interactPrompt.setVisible(false);
           this._travelTo(tr);
+        }
+        return;
+      }
+    }
+    // ── Town examine points (generic; interiors have their own) ──
+    const tExamines = (this.town && this.town.examines) || [];
+    for (const pt of tExamines) {
+      if (pt.requires && !pt.requires()) continue;
+      const ed = Math.hypot(this.playerCartX - pt.x, this.playerCartY - pt.y);
+      if (ed <= pt.radius) {
+        const eIso = cartToIso(pt.x, pt.y);
+        this.interactPrompt.setText(pt.prompt);
+        this.interactPrompt.setPosition(
+          eIso.x + this.worldOffset.x,
+          eIso.y + this.worldOffset.y - 40
+        );
+        this.interactPrompt.setVisible(true);
+        if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+          this.interactPrompt.setVisible(false);
+          this.openDialogue(pt.name, pt.lines, pt.journal
+            ? () => { try { addJournalEntry(pt.journal); } catch (e) {} }
+            : null, 'simple');
         }
         return;
       }
