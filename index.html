@@ -2336,6 +2336,7 @@ class GameScene extends Phaser.Scene {
     // Phase B world loader seam: interiors are small TownDefinitions
     // with their own compact build/update path (LBA mandate)
     this.town = activeTown();
+    this._transitioning = false; // reset on every (re)build — travel/doors set it
     if (this.town.isInterior) { this.createInterior(); return; }
 
     this.cameras.main.setBackgroundColor(PAL.sky);
@@ -5964,6 +5965,9 @@ class GameScene extends Phaser.Scene {
       this.scene.start('TravelScene', {
         to: tr.to, spawn: tr.spawn, line: tr.line || '',
         toName: (TOWNS[tr.to] && TOWNS[tr.to].name) || tr.to,
+        from: this.town.id,
+        originSpawn: { x: Math.round(this.playerCartX * 2) / 2,
+                       y: Math.round(this.playerCartY * 2) / 2 },
       });
     });
   }
@@ -6673,10 +6677,13 @@ class GameScene extends Phaser.Scene {
     // Advance the clock
     const prev = gameState.gameHour;
     gameState.gameHour += (delta / GAME_HOUR_MS);
+    const prevHour = prev;
     if (gameState.gameHour >= 24) {
       gameState.gameHour -= 24;
       gameState._noonBellRung = false; // reset for new day
     }
+    // Dawn releases the night roads — the circle may be walked again
+    if (prevHour < 6 && gameState.gameHour >= 6) gameState._nightTurnDone = false;
     // Refresh the gates (cheap — just two boolean checks)
     gameState.wispsVisible = isTimeWindow('dusk') || isTimeWindow('night') || isTimeWindow('latenight');
     gameState.iburActive  = isTimeWindow('dawn') || isTimeWindow('dusk');
@@ -10145,6 +10152,7 @@ class GameScene extends Phaser.Scene {
     this.handleMovement(delta);
     this.updateFootsteps();
     if (isWyrdow) {
+      this.updateNightRoads(time, delta);
       this.updateThreadGuidance(time, delta);
       this.updateRegencyTells();
     }
@@ -10330,6 +10338,66 @@ class GameScene extends Phaser.Scene {
       },
       onComplete: () => { g.destroy(); this._attnTellBusy = false; },
     });
+  }
+
+  // ── NIGHT ROADS (bible rule, LBA mandate) ──────────────────────────
+  // "The roads sometimes rearrange at night unless you carry blue thread
+  // soaked in wine." Before Baba's thread is in hand, the village edge
+  // turns night wanderers quietly around. Fog creeps first — fair warning.
+  updateNightRoads(time, delta) {
+    const night = gameState.gameHour >= 20 || gameState.gameHour < 6;
+    const protectedByThread = gameState.inventory.includes('thread_knots')
+      || gameState.questComplete; // straightened roads no longer wander
+    const active = night && !protectedByThread
+      && !this.dialogueActive && !this.visionActive
+      && !this._paused && !this._pauseLayer && !this._cutsceneActive;
+
+    if (!this._nightFogGfx) {
+      this._nightFogGfx = this.add.graphics().setScrollFactor(0).setDepth(1004);
+    }
+    const cam = this.cameras.main;
+    const cx = CENTER - 0.5, cy = CENTER - 0.5;
+    const d = Math.hypot(this.playerCartX - cx, this.playerCartY - cy);
+
+    // Creeping edge fog from radius 9 outward
+    const fogF = active ? Phaser.Math.Clamp((d - 9) / 2.5, 0, 1) : 0;
+    this._nightFogGfx.clear();
+    if (fogF > 0.02) {
+      const W = cam.width, H = cam.height;
+      const a = fogF * 0.55;
+      this._nightFogGfx.fillStyle(0x05050c, a);
+      const band = Math.round(90 * fogF);
+      this._nightFogGfx.fillRect(0, 0, W, band);
+      this._nightFogGfx.fillRect(0, H - band, W, band);
+      this._nightFogGfx.fillRect(0, 0, band, H);
+      this._nightFogGfx.fillRect(W - band, 0, band, H);
+      this._nightFogGfx.fillStyle(0x05050c, a * 0.5);
+      this._nightFogGfx.fillRect(band, band, W - band * 2, Math.round(band * 0.7));
+    }
+
+    // Past radius 11.2 the road turns beneath them
+    if (active && d > 11.2 && !this._nightTurnCooldown) {
+      this._nightTurnCooldown = true;
+      this.time.delayedCall(5000, () => { this._nightTurnCooldown = false; });
+      // Pull the player back along their own bearing, facing the village
+      const ang = Math.atan2(this.playerCartY - cy, this.playerCartX - cx);
+      const fade = this.add.rectangle(0, 0, cam.width, cam.height, 0x05050c, 1)
+        .setOrigin(0, 0).setScrollFactor(0).setDepth(4000).setAlpha(0);
+      this.tweens.add({
+        targets: fade, alpha: 1, duration: 260, yoyo: true, hold: 220,
+        onYoyo: () => {
+          this.playerCartX = cx + Math.cos(ang) * 7.5;
+          this.playerCartY = cy + Math.sin(ang) * 7.5;
+          this.updatePlayerPosition();
+        },
+        onComplete: () => fade.destroy(),
+      });
+      try { sfx.play('vision_whoosh', { volume: 0.4 }); } catch (e) {}
+      this.showItemNotification(this._nightTurnSeen
+        ? 'The road has turned beneath you again.'
+        : 'The road has turned beneath you. The village is ahead — again.');
+      this._nightTurnSeen = true;
+    }
   }
 
   // ── THREAD GUIDANCE SHIMMER ────────────────────────────────────────
@@ -13152,6 +13220,14 @@ class TravelScene extends Phaser.Scene {
     this._spawn = (data && data.spawn) || null;
     this._line = (data && data.line) || '';
     this._toName = (data && data.toName) || '';
+    this._from = (data && data.from) || 'wyrdow';
+    this._originSpawn = (data && data.originSpawn) || null;
+    // Night roads: without blue thread, the dark road walks strangers in
+    // a circle — once per night. The second attempt is respected.
+    const night = gameState.gameHour >= 20 || gameState.gameHour < 6;
+    const hasThread = gameState.inventory.includes('thread_knots');
+    this._turned = night && !hasThread && !gameState._nightTurnDone && !!this._originSpawn;
+    if (this._turned) gameState._nightTurnDone = true;
   }
 
   create() {
@@ -13188,7 +13264,11 @@ class TravelScene extends Phaser.Scene {
     this._walker = this.add.graphics();
     this._walkerPos = { x: px, y: py };
 
-    // The travel line, italic, centred
+    // The travel line, italic, centred (the turned road speaks differently)
+    if (this._turned) {
+      this._line = 'The dark road walks strangers in a circle. It is not unkind about it.';
+      this._toName = (TOWNS[this._from] && TOWNS[this._from].name) || this._from;
+    }
     if (this._line) {
       const line = this.add.text(W / 2, H * 0.22, this._line, {
         fontFamily: 'Georgia, serif', fontSize: '16px', fontStyle: 'italic',
@@ -13214,9 +13294,11 @@ class TravelScene extends Phaser.Scene {
       try { sfx.stopLoop('footsteps_dirt', 500); } catch (e) {}
       cam.fadeOut(600, 0, 0, 0);
       cam.once('camerafadeoutcomplete', () => {
-        gameState.currentTown = this._to;
-        try { loadTownState(this._to); saveGame(); } catch (e) {}
-        this.scene.start('GameScene', { firstVisit: false, spawn: this._spawn });
+        const dest = this._turned ? this._from : this._to;
+        const spawn = this._turned ? this._originSpawn : this._spawn;
+        gameState.currentTown = dest;
+        try { loadTownState(dest); saveGame(); } catch (e) {}
+        this.scene.start('GameScene', { firstVisit: false, spawn });
       });
     });
   }
