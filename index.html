@@ -10151,6 +10151,7 @@ class GameScene extends Phaser.Scene {
 
     this.handleMovement(delta);
     this.updateFootsteps();
+    this.updateViewVeil();
     if (isWyrdow) {
       this.updateNightRoads(time, delta);
       this.updateThreadGuidance(time, delta);
@@ -12291,11 +12292,74 @@ class GameScene extends Phaser.Scene {
   }
 
   updateCamera() {
+    const cam = this.cameras.main;
+    // Gameplay zoom: frame ~15 tiles across, whatever the window size —
+    // the whole village visible at once killed all sense of discovery.
+    // Cutscenes may drive zoom themselves; don't fight them.
+    if (!this._cutsceneActive && !this.visionActive) {
+      const targetZoom = Phaser.Math.Clamp(cam.width / (15.5 * TILE_W), 1.3, 2.1);
+      cam.zoom += (targetZoom - cam.zoom) * 0.06;
+    }
     const iso = cartToIso(this.playerCartX, this.playerCartY);
-    const targetX = iso.x + this.worldOffset.x - this.cameras.main.width / 2;
-    const targetY = iso.y + this.worldOffset.y - this.cameras.main.height / 2;
-    this.cameras.main.scrollX += (targetX - this.cameras.main.scrollX) * 0.08;
-    this.cameras.main.scrollY += (targetY - this.cameras.main.scrollY) * 0.08;
+    const targetX = iso.x + this.worldOffset.x - cam.width / 2;
+    const targetY = iso.y + this.worldOffset.y - cam.height / 2;
+    cam.scrollX += (targetX - cam.scrollX) * 0.08;
+    cam.scrollY += (targetY - cam.scrollY) * 0.08;
+  }
+
+  // ── VIEW VEIL — the lantern-radius of knowing ─────────────────────
+  // The world is clear near the traveller and falls into a soft dark
+  // beyond — tighter after dusk. Discovery means walking toward things.
+  // Cutscenes and dialogue lift it so directed moments stay readable.
+  updateViewVeil() {
+    // World-space veil: the gradient rides the PLAYER's world position
+    // and the camera transforms it like everything else — no screen math.
+    if (!this._veilGfx) {
+      this._veilGfx = this.add.graphics().setDepth(999); // above world, below HUD
+    }
+    const g = this._veilGfx;
+    g.clear();
+    if (this._cutsceneActive || this.visionActive || this.dialogueActive
+      || this._paused || this._pauseLayer) {
+      if (this._veilImg) this._veilImg.setVisible(false);
+      return;
+    }
+    const cam = this.cameras.main;
+    const iso = cartToIso(this.playerCartX, this.playerCartY);
+    const wx = iso.x + this.worldOffset.x;
+    const wy = iso.y + this.worldOffset.y - 14;
+    const night = gameState.gameHour >= 20 || gameState.gameHour < 6;
+    const clearR = (night ? 4.0 : 5.0) * (TILE_W / 2); // WORLD px of full clarity
+    const maxA = night ? 0.78 : 0.62;
+    // One-time smooth radial gradient texture (no ring banding)
+    if (!this.textures.exists('veil_grad')) {
+      const size = 512;
+      const cnv = this.textures.createCanvas('veil_grad', size, size);
+      const ctx = cnv.getContext();
+      const grd = ctx.createRadialGradient(size / 2, size / 2, size * 0.22, size / 2, size / 2, size * 0.5);
+      grd.addColorStop(0, 'rgba(6,6,16,0)');
+      grd.addColorStop(0.55, 'rgba(6,6,16,0.62)');
+      grd.addColorStop(1, 'rgba(6,6,16,1)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, size, size);
+      cnv.refresh();
+    }
+    if (!this._veilImg) {
+      this._veilImg = this.add.image(0, 0, 'veil_grad').setDepth(999);
+    }
+    const scale = clearR / 113; // texture clear-radius ≈ 113px
+    this._veilImg.setVisible(true).setPosition(wx, wy).setScale(scale).setAlpha(maxA);
+    // Solid dark beyond the gradient's edge out to the camera's world view
+    const rOut = 256 * scale - 2;
+    const wv = cam.worldView;
+    const pad = 40;
+    g.fillStyle(0x060610, maxA);
+    const bx = wx - rOut, by = wy - rOut, bs = rOut * 2;
+    const L = wv.x - pad, T = wv.y - pad, R = wv.right + pad, B = wv.bottom + pad;
+    if (by > T) g.fillRect(L, T, R - L, by - T);
+    if (B > by + bs) g.fillRect(L, by + bs, R - L, B - (by + bs));
+    if (bx > L) g.fillRect(L, by, bx - L, bs);
+    if (R > bx + bs) g.fillRect(bx + bs, by, R - (bx + bs), bs);
   }
 }
 
