@@ -123,13 +123,16 @@ The implied Regency furniture is now explicit quest machinery:
 - **Charm economy debut**: surrendered-charm queue at the crucible is the tragedy;
   hidden poppy-seed charms in nooks are the resistance. Charms barter for favors.
 
-## Open questions for the creator
+## Decisions *(answered by the creator, 2026-07-14 — all locked)*
 
-1. **The Sleeper's origin** — built to protect the town from the Collapse, or something
-   the Collapse woke? (Affects Act 5's cure lore.)
-2. **Vosk's tally** — is she a proto-defector like Pin, or the study in certainty Brel
-   only hinted at? One of them should be irredeemable.
-3. **Fragment 2's content** — the codex piece itself: recipe fragment, or a name-list?
-4. **Scope check** — the knock mechanic needs a small rhythm-input system (~E-taps against
-   a visible/audible beat). Approve before build; a fallback is timed-hold like observation.
-5. Boy's name: **Mendel** or **Tobiasz** (both panels proposed both, for different NPCs).
+1. **The Sleeper's origin: built, then woken.** The town built it together, generations
+   ago, as a protector — inert clay until the Collapse made folk-things real. Community
+   effort is what works; the Collapse only turned the key. (Act 5 cure-lore anchor.)
+2. **Vosk is irredeemable** — the study in certainty Brel only hinted at. Polite,
+   precise, never wavering. Pin is the only seam in the office.
+3. **Fragment 2 is names that ARE the recipe** — a list of names, and the realization
+   that the list is methodology: the cure requires specific people believing together.
+   Every later town becomes a search for people, not pages.
+4. **The knock is rhythm-lite** — 3-4 learned knock patterns answered with E-taps in
+   loose, forgiving windows; strong audio-visual cues; positional audio already shipped.
+5. **The boy is Mendel.** (Tobiasz stays reserved for the Act 3 forest beekeeper.)

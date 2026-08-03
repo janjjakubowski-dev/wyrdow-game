@@ -377,8 +377,19 @@ const TOWNS = {
       groundGrade: { r: 0.62, g: 0.86, b: 0.8, warmCenter: false },
       interiors: {}, patrols: [], checkpoints: [], charms: [], zLevels: null,
       doors: [],
-      // First voice of the Copper Hill — three examine beats
+      // First voice of the Copper Hill — three examine beats + Srulik
       examines: [
+        { x: 7.6, y: 19.4, radius: 1.5, prompt: '[E] Talk to Srulik',
+          name: 'Srulik',
+          lines: [
+            ">The keeper of the study house looks at you the way one reads a difficult ledger: twice.",
+            "You have Elżbieta's knots in your walk. She wrote ahead. She always writes ahead.",
+            "Yes — the hill. No — not now. The office counts everyone who climbs, and you have been counted once already today.",
+            ">He shifts the ledger under his arm. His fingers are inked to the second knuckle.",
+            "Lodge at The Ladder. Ask Cyla for the room that isn't rented. Tell her the braid sent you.",
+            "And if you must know one thing about the hill tonight, know this: it was built kindly. Whatever they say now. It was built kindly, and it is very tired.",
+            ">You sense that, given one more question, he would talk about the golem until winter. You keep the question.",
+          ] },
         { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The tear-streak',
           name: 'The Tear-Streak',
           lines: [
@@ -558,6 +569,33 @@ const TOWNS = {
         q.fillRect(cr.x + 16, cr.y - 2, 4, 2);
         q._sortY = cr.y;
         scene.objectLayer.add(q);
+
+        // ── SRULIK — keeper of the study house, ledger under his arm ──
+        const sk = at(7.6, 19.1);
+        const sr = scene.add.graphics();
+        sr.fillStyle(0x000000, 0.3); sr.fillEllipse(sk.x, sk.y + 3, 16, 5);
+        // Long dark coat, narrow shoulders
+        sr.fillRect && sr.fillStyle(0x241c2a, 1);
+        sr.fillRect(sk.x - 6, sk.y - 20, 12, 22);
+        sr.fillStyle(0x2e2436, 1); sr.fillRect(sk.x - 6, sk.y - 20, 12, 2);
+        sr.fillStyle(0x18121e, 1); sr.fillRect(sk.x - 6, sk.y - 2, 12, 2);
+        // The ledger under the left arm — thick, corner-worn
+        sr.fillStyle(0x6a4828, 1); sr.fillRect(sk.x - 11, sk.y - 13, 6, 8);
+        sr.fillStyle(0x8a6a3a, 1); sr.fillRect(sk.x - 11, sk.y - 13, 6, 1);
+        sr.fillStyle(0xd8c8a0, 1); sr.fillRect(sk.x - 10, sk.y - 11, 4, 1);
+        // Head — pale, tired, kind
+        sr.fillStyle(0xc0a084, 1); sr.fillRect(sk.x - 4, sk.y - 27, 8, 7);
+        sr.fillStyle(0xa88a6e, 1); sr.fillRect(sk.x - 4, sk.y - 21, 8, 1);
+        // Dark cap sitting far back
+        sr.fillStyle(0x181420, 1); sr.fillRect(sk.x - 4, sk.y - 29, 8, 3);
+        // Short white beard + ink-stained fingertips
+        sr.fillStyle(0xe0dcc8, 1); sr.fillRect(sk.x - 3, sk.y - 20, 6, 3);
+        sr.fillStyle(0x1a1a2e, 1); sr.fillRect(sk.x + 4, sk.y - 8, 2, 2);
+        // Eyes — reading you, twice
+        sr.fillStyle(0x241c14, 1);
+        sr.fillRect(sk.x - 3, sk.y - 25, 2, 1); sr.fillRect(sk.x + 1, sk.y - 25, 2, 1);
+        sr._sortY = sk.y;
+        scene.objectLayer.add(sr);
 
         // ── Pines on the west approach ──
         const pg = scene.add.graphics();
@@ -950,6 +988,32 @@ const JOURNAL_ENTRIES = {
     text: "The roads straightened. Not dramatically \u2014 just became more certain about where they go. Po\u0142udnica appeared at noon and looked at my hand and nodded. Baba El\u017Cbieta\u2019s bells rang on their own. I think I did something real today.",
   },
 };
+
+// ── CUSTOMS — the folklore appendix (Black Book's most-loved idea) ──
+// Unlocked when a ritual completes: what the custom IS, in the world's
+// own memory. The traveller records what the locals half-remember.
+Object.assign(JOURNAL_ENTRIES, {
+  custom_perimeter: {
+    title: 'Custom: Walking the Bounds', type: 'custom', category: 'Custom',
+    text: "The old villages walked their own edges once a year — obchod granic, the beating of the bounds — sunwise, always sunwise, so the fields would know their keepers and the wards would know their names. The Regency calls it trespass-adjacent perambulation. The wards call it being greeted. I walked it. Something noticed.",
+  },
+  custom_offering: {
+    title: 'Custom: Bread First, Always Bread', type: 'custom', category: 'Custom',
+    text: "For the domowik — the house's grandfather-spirit — the order is the courtesy: bread, that the house never hunger; salt, that the friendship never spoil; then one thing that matters to you, so the spirit knows you are not paying a toll but keeping company. Zuzka's grandmother was strict about the order. Now I understand she was being polite to someone.",
+  },
+  custom_noon: {
+    title: 'Custom: The Noon Silence', type: 'custom', category: 'Custom',
+    text: "The południca walks the field-roads at midday, and the old rule is not to hide but to REST — to stop the scythe, still the tongue, and let the hour pass through you. Noon is hers the way midnight belongs to others. The village stops. Even the chickens. The custom is not fear. It is manners.",
+  },
+  custom_nocnica: {
+    title: 'Custom: What Watches After Dusk', type: 'custom', category: 'Custom',
+    text: "Nocnice come with the dark at the edges of settled places, and the lore is exact: they are drawn to motion and quieted by stillness. The old mothers did not bar the door against them — they sat still by the marsh and let themselves be seen. What watches from the corner of your eye is shy, not cruel. Baba said there was a difference. She was right.",
+  },
+  custom_wisps: {
+    title: 'Custom: The Lights That Ask', type: 'custom', category: 'Custom',
+    text: "Błędne ognie — the wandering fires. The rationalists said marsh-gas; the old folk said souls with one errand left. Both agreed on the rule: the lights do not lead you anywhere. They ask you to CHOOSE, and the choosing is the point. Truth's road is longer. It was longer for them too.",
+  },
+});
 
 // Display names for inventory item ids — shown in the journal's
 // "Carried" section on the left page.
@@ -2822,12 +2886,14 @@ class GameScene extends Phaser.Scene {
 
   // Redraw all grass blades with current wind sway
   updateGrass(time) {
-    const windBase = Math.sin(time * 0.0008) * 2;
+    // Gusts bend every blade together — that synchrony is what reads as WEATHER
+    const gust = this._gustMul || 1;
+    const windBase = Math.sin(time * 0.0008) * 2 * gust;
     this.grassBlades.forEach(gb => {
       gb.g.clear();
       gb.g.lineStyle(1, gb.color, 0.55);
       gb.blades.forEach(b => {
-        const sway = Math.sin(time * 0.001 * b.speed + b.phase) * 2.5 + windBase;
+        const sway = (Math.sin(time * 0.001 * b.speed + b.phase) * 2.5 + windBase) * (gust > 1 ? 1.3 : 1);
         gb.g.beginPath();
         gb.g.moveTo(gb.x + b.bx, gb.y);
         gb.g.lineTo(gb.x + b.bx + sway, gb.y - b.height);
@@ -5117,6 +5183,14 @@ class GameScene extends Phaser.Scene {
 
   updateBackgroundVillagers(time, delta) {
     if (!this.bgVillagers) return;
+    // Schedules: day folk go in after dusk; the sky-watcher comes OUT for
+    // the stars — his rock is empty until the first of them shows.
+    const villNight = gameState.gameHour >= 20 || gameState.gameHour < 6;
+    for (const v of this.bgVillagers) {
+      const wantVisible = (v.kind === 'skywatcher')
+        ? (villNight || isTimeWindow('dusk')) : !villNight;
+      if (v.sprite.visible !== wantVisible) v.sprite.setVisible(wantVisible);
+    }
     // Midday silence is sacred — during the noon window every villager
     // stops where they stand. The player learns the custom by watching.
     if (typeof isTimeWindow === 'function' && isTimeWindow('noon')) return;
@@ -5323,6 +5397,9 @@ class GameScene extends Phaser.Scene {
 
   updateEzra(time, delta) {
     if (!this.ezraSprite) return;
+    // Schedule: he carries the boots inside after dusk
+    const ezraIndoors = gameState.gameHour >= 20 || gameState.gameHour < 6;
+    if (this.ezraSprite.visible === ezraIndoors) this.ezraSprite.setVisible(!ezraIndoors);
     // The needle rests during the noon silence
     if (typeof isTimeWindow === 'function' && isTimeWindow('noon')) return;
     this.ezraFrameTimer = (this.ezraFrameTimer || 0) + delta;
@@ -6682,8 +6759,14 @@ class GameScene extends Phaser.Scene {
       gameState.gameHour -= 24;
       gameState._noonBellRung = false; // reset for new day
     }
-    // Dawn releases the night roads — the circle may be walked again
-    if (prevHour < 6 && gameState.gameHour >= 6) gameState._nightTurnDone = false;
+    // Dawn releases the night roads — the circle may be walked again —
+    // and deals the day's weather
+    if (prevHour < 6 && gameState.gameHour >= 6) {
+      gameState._nightTurnDone = false;
+      this._rollWeather();
+    }
+    if (!gameState.weatherToday) this._rollWeather();
+    this.updateWeather(delta);
     // Refresh the gates (cheap — just two boolean checks)
     gameState.wispsVisible = isTimeWindow('dusk') || isTimeWindow('night') || isTimeWindow('latenight');
     gameState.iburActive  = isTimeWindow('dawn') || isTimeWindow('dusk');
@@ -6740,6 +6823,79 @@ class GameScene extends Phaser.Scene {
     } else {
       todG.fillStyle(0xcfd6e8, 0.9);  todG.fillCircle(bx, by, 3.5);
       todG.fillStyle(0x14141e, 0.9);  todG.fillCircle(bx + 1.6, by - 1.1, 2.6);
+    }
+  }
+
+  // ── WEATHER — one state per day: clear, mist, drizzle, or gusts ────
+  _rollWeather() {
+    const r = Math.random();
+    gameState.weatherToday = r < 0.45 ? 'clear' : r < 0.65 ? 'mist' : r < 0.85 ? 'gusts' : 'drizzle';
+  }
+
+  updateWeather(delta) {
+    const w = gameState.weatherToday;
+    const cam = this.cameras.main;
+    if (!this._weatherGfx) {
+      this._weatherGfx = this.add.graphics().setScrollFactor(0).setDepth(998);
+      this._mistShift = 0;
+      this._drops = [];
+      this._gustMul = 1;
+      this._gustTimer = 4000 + Math.random() * 8000;
+    }
+    const g = this._weatherGfx;
+    g.clear();
+    if (this.town && this.town.isInterior) return; // weather stays outside
+
+    if (w === 'mist') {
+      // Two soft bands drifting across the screen, wrapping
+      this._mistShift = (this._mistShift + delta * 0.008) % (cam.width + 600);
+      const bands = [
+        { y: cam.height * 0.38, h: 60, a: 0.07, off: 0 },
+        { y: cam.height * 0.62, h: 90, a: 0.10, off: cam.width * 0.55 },
+      ];
+      for (const b of bands) {
+        const x = ((this._mistShift + b.off) % (cam.width + 600)) - 300;
+        g.fillStyle(0xc8ccd4, b.a);
+        g.fillEllipse(x, b.y, 700, b.h);
+        g.fillEllipse(x + 420, b.y + 24, 520, b.h * 0.7);
+        g.fillStyle(0xc8ccd4, b.a * 0.6);
+        g.fillEllipse(x - 380, b.y - 16, 480, b.h * 0.8);
+      }
+    } else if (w === 'drizzle') {
+      // Fine rain, drifting slightly with the world's wind
+      if (this._drops.length === 0) {
+        for (let i = 0; i < 54; i++) {
+          this._drops.push({ x: Math.random() * cam.width, y: Math.random() * cam.height,
+            s: 5 + Math.random() * 4 });
+        }
+      }
+      g.lineStyle(1, 0x9aa4b8, 0.35);
+      for (const d of this._drops) {
+        d.y += d.s * delta * 0.06;
+        d.x -= delta * 0.012;
+        if (d.y > cam.height) { d.y = -8; d.x = Math.random() * cam.width; }
+        if (d.x < 0) d.x += cam.width;
+        g.beginPath();
+        g.moveTo(d.x, d.y);
+        g.lineTo(d.x - 1.5, d.y + 7);
+        g.strokePath();
+      }
+    } else if (w === 'gusts') {
+      // Envelope only — the grass and smoke do the showing
+      this._gustTimer -= delta;
+      if (this._gustTimer <= 0) {
+        this._gustTimer = 6000 + Math.random() * 8000;
+        this._gustAt = 0;
+      }
+      if (this._gustAt !== undefined && this._gustAt < 1600) {
+        this._gustAt += delta;
+        const p = this._gustAt / 1600;
+        this._gustMul = 1 + Math.sin(p * Math.PI) * 2.2;
+      } else {
+        this._gustMul = 1;
+      }
+    } else {
+      this._gustMul = 1;
     }
   }
 
@@ -7575,6 +7731,7 @@ class GameScene extends Phaser.Scene {
       case 'observe':  return { ch: '\u25CB', col: '#7a6a50' }; // ○ magnifying
       case 'document': return { ch: '\u25A3', col: '#7a6a50' }; // ▣ seal
       case 'ritual':   return { ch: '\u2726', col: '#7a6a50' }; // ✦ knot
+      case 'custom':   return { ch: '\u2766', col: '#7a6a50' }; // ❦ floral heart — the old ways
       default:         return { ch: '\u2022', col: '#7a6a50' }; // •
     }
   }
@@ -10016,6 +10173,10 @@ class GameScene extends Phaser.Scene {
     // Zuzka idle — 2-frame breathing loop (~2.4s period). She is almost
     // completely still; frame 1 shifts weight 1px and brightens the jar.
     if (this.zuzkaSprite) {
+      // Schedule: children are called in after dusk (unless mid-approach)
+      const zuzkaIndoors = (gameState.gameHour >= 20 || gameState.gameHour < 6)
+        && !this._zuzkaApproaching && !this._zuzkaApproachQueued;
+      if (this.zuzkaSprite.visible === zuzkaIndoors) this.zuzkaSprite.setVisible(!zuzkaIndoors);
       const targetFrame = (Math.floor(time / 1200) % 2);
       if (targetFrame !== this.zuzkaFrame) {
         this.zuzkaFrame = targetFrame;
@@ -10719,6 +10880,8 @@ class GameScene extends Phaser.Scene {
   }
 
   tryEzraInteraction() {
+    // Indoors after dusk — no one to talk to at the empty stool
+    if (!this.ezraSprite || !this.ezraSprite.visible) return false;
     const dx = this.playerCartX - EZRA.cartX;
     const dy = this.playerCartY - EZRA.cartY;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -11253,6 +11416,7 @@ class GameScene extends Phaser.Scene {
       if (allHit) {
         gameState.ritualState.perimeter_walked = true;
         try { sfx.play('perimeter_complete'); } catch (e) {}
+        try { addJournalEntry('custom_perimeter'); } catch (e) {}
         if (!gameState.regencyFired.perimeter_walked) {
           gameState.regencyFired.perimeter_walked = true;
           adjustAttention(-1, 'perimeter_walked');
@@ -11363,6 +11527,7 @@ class GameScene extends Phaser.Scene {
         // requirement equalled the entire ritual window (impossible)
         if (this._noonStillTimer >= 30000 && !gameState.ritualState.noon_silence_kept) {
           gameState.ritualState.noon_silence_kept = true;
+          try { addJournalEntry('custom_noon'); } catch (e) {}
         }
       } else {
         if (this._noonChimePlayed && !gameState.regencyFired.noon_silence_failed) {
@@ -11405,6 +11570,7 @@ class GameScene extends Phaser.Scene {
           this._nocnicaTriggered = true;
           gameState.ritualState.nocnica_found = true;
           try { addJournalEntry('nocnica_cost'); } catch (e) {}
+          try { addJournalEntry('custom_nocnica'); } catch (e) {}
           if (!gameState.regencyFired.nocnica_found) {
             gameState.regencyFired.nocnica_found = true;
             adjustAttention(-3, 'nocnica_found');
@@ -11636,6 +11802,7 @@ class GameScene extends Phaser.Scene {
       if (a === 'bread' && b === 'salt' && personals.includes(c)) {
         gameState.ritualState.domovoi_offering_correct = true;
         try { addJournalEntry('domovoi_watching'); } catch (e) {}
+        try { addJournalEntry('custom_offering'); } catch (e) {}
         if (!gameState.regencyFired.domovoi_correct) {
           gameState.regencyFired.domovoi_correct = true;
           adjustAttention(-2, 'domovoi_correct');
@@ -12063,9 +12230,11 @@ class GameScene extends Phaser.Scene {
       }
       if (!gameState.regencyFired.wisp_choice) {
         gameState.regencyFired.wisp_choice = true;
-        if (gameState.ritualState.wisp_choice === 'truth')   adjustAttention(+2, 'wisp_truth');
+        if (gameState.ritualState.wisp_choice === 'truth')        adjustAttention(+2, 'wisp_truth');
         else if (gameState.ritualState.wisp_choice === 'ignored') adjustAttention(-1, 'wisp_ignored');
         // 'comfort' is 0
+        // The custom is learned whichever way the lights were answered
+        try { addJournalEntry('custom_wisps'); } catch (e) {}
       }
     }, 8000);
   }
