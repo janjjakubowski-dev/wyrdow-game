@@ -54,8 +54,9 @@ Object.assign(GameScene.prototype, {
     }
   },
   handleMovement(delta) {
-    // Frozen while the journal, pause menu, or a modal overlay is open
-    if (this._paused || this._pauseLayer
+    // Frozen while the journal, pause menu, a modal overlay, or a
+    // knock session is open — you cannot walk and answer the hill
+    if (this._paused || this._pauseLayer || this._knock
       || this._domovoiSelectorOpen || this._regencyDocOpen) return;
     let dx = 0, dy = 0;
     if (this.cursors.up.isDown)    { dx -= 1; dy -= 1; }
@@ -359,6 +360,9 @@ Object.assign(GameScene.prototype, {
         return;
       }
     }
+    // ── Knock posts + data-driven town NPCs (generic systems) ──
+    if (this.tryKnockPostInteraction && this.tryKnockPostInteraction(this.animTime)) return;
+    if (this.tryTownNpcInteraction && this.tryTownNpcInteraction()) return;
     // ── Town examine points (generic; interiors have their own) ──
     const tExamines = (this.town && this.town.examines) || [];
     for (const pt of tExamines) {

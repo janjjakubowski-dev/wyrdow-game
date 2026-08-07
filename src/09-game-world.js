@@ -1711,40 +1711,68 @@ Object.assign(GameScene.prototype, {
   // the world. Register late-created UI via _registerUI().
   _setupUICamera() {
     if (this._uiCam) return;
-    // Anything created later with scrollFactor 0 is UI by definition —
-    // catch it at creation so journal/pause/portraits/toasts need no
-    // per-call bookkeeping.
-    this.children.addCallback = (obj) => {
-      if (!this._uiCam) return;
-      if (obj.scrollFactorX === 0 && obj.scrollFactorY === 0) this._registerUI(obj);
-      else { try { this._uiCam.ignore(obj); } catch (e) {} }
-    };
     const cam = this.cameras.main;
     this._uiCam = this.cameras.add(0, 0, cam.width || 1280, cam.height || 720);
     this._uiCam.setScroll(0, 0);
     this._uiCam.transparent = true;
     this._uiObjects = [];
+    this._camReclassify = [];
+    // Late-created objects: chained calls like .setScrollFactor(0)
+    // .setDepth(-8) run AFTER the display-list add fires, so what we see
+    // here is a best guess. Classify now (so nothing double-renders) and
+    // again on the next postupdate — after the chain has finished, but
+    // before the frame renders.
+    this.children.addCallback = (obj) => {
+      if (!this._uiCam) return;
+      this._classifyForCameras(obj);
+      this._camReclassify.push(obj);
+    };
+    // Scene events persist across restarts — keep exactly one listener
+    if (this._camReclassifyHandler) this.events.off('postupdate', this._camReclassifyHandler);
+    this._camReclassifyHandler = () => {
+      if (!this._uiCam || !this._camReclassify.length) return;
+      const batch = this._camReclassify;
+      this._camReclassify = [];
+      batch.forEach(o => { if (o && o.scene) this._classifyForCameras(o); });
+    };
+    this.events.on('postupdate', this._camReclassifyHandler);
     // Keep the UI camera the size of the window (Scale.RESIZE mode)
-    this.scale.on('resize', (size) => {
+    if (this._uiResizeHandler) this.scale.off('resize', this._uiResizeHandler);
+    this._uiResizeHandler = (size) => {
       if (this._uiCam) this._uiCam.setSize(size.width, size.height);
-    });
-    // Everything currently in the display list is world; UI opts in later
-    this.children.list.forEach(o => {
-      if (o.scrollFactorX === 0 && o.scrollFactorY === 0) this._registerUI(o);
-      else { try { this._uiCam.ignore(o); } catch (e) {} }
-    });
+    };
+    this.scale.on('resize', this._uiResizeHandler);
+    // Classify everything already on the display list
+    this.children.list.forEach(o => this._classifyForCameras(o));
     // Layer containers are always world
     [this.groundLayer, this.lightLayer, this.objectLayer, this.particleLayer]
-      .forEach(l => { if (l) { try { this._uiCam.ignore(l); } catch (e) {} } });
+      .forEach(l => { if (l) this._classifyForCameras(l, true); });
+  },
+  // The routing rule: fixed-position (scrollFactor-0) objects are UI —
+  // EXCEPT at negative depth, which marks world backdrops (sky gradient,
+  // stars, time-of-day tint). Those must render under the town on the
+  // gameplay camera, not paint over it on the HUD camera.
+  _classifyForCameras(obj, forceWorld) {
+    if (!obj || !this._uiCam) return obj;
+    try {
+      const isUI = !forceWorld && obj.scrollFactorX === 0
+        && obj.scrollFactorY === 0 && obj.depth >= 0;
+      // Clear both routing bits, then set exactly one
+      obj.cameraFilter &= ~(this.cameras.main.id | this._uiCam.id);
+      if (isUI) {
+        this.cameras.main.ignore(obj);
+        if (!this._uiObjects.includes(obj)) this._uiObjects.push(obj);
+      } else {
+        this._uiCam.ignore(obj);
+        const i = this._uiObjects.indexOf(obj);
+        if (i >= 0) this._uiObjects.splice(i, 1);
+      }
+    } catch (e) {}
+    return obj;
   },
   // Route a UI object to the UI camera (hidden from the world camera).
   _registerUI(obj) {
-    if (!obj || !this._uiCam) return obj;
-    try {
-      this.cameras.main.ignore(obj);
-      if (!this._uiObjects.includes(obj)) this._uiObjects.push(obj);
-    } catch (e) {}
-    return obj;
+    return this._classifyForCameras(obj);
   },
   // ── VIEW VEIL — the lantern-radius of knowing ─────────────────────
   // The world is clear near the traveller and falls into a soft dark

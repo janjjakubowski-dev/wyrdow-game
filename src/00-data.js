@@ -290,17 +290,6 @@ const TOWNS = {
       doors: [],
       // First voice of the Copper Hill — three examine beats + Srulik
       examines: [
-        { x: 7.6, y: 19.4, radius: 1.5, prompt: '[E] Talk to Srulik',
-          name: 'Srulik',
-          lines: [
-            ">The keeper of the study house looks at you the way one reads a difficult ledger: twice.",
-            "You have Elżbieta's knots in your walk. She wrote ahead. She always writes ahead.",
-            "Yes — the hill. No — not now. The office counts everyone who climbs, and you have been counted once already today.",
-            ">He shifts the ledger under his arm. His fingers are inked to the second knuckle.",
-            "Lodge at The Ladder. Ask Cyla for the room that isn't rented. Tell her the braid sent you.",
-            "And if you must know one thing about the hill tonight, know this: it was built kindly. Whatever they say now. It was built kindly, and it is very tired.",
-            ">You sense that, given one more question, he would talk about the golem until winter. You keep the question.",
-          ] },
         { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The tear-streak',
           name: 'The Tear-Streak',
           lines: [
@@ -319,6 +308,237 @@ const TOWNS = {
             ">That is the point of it.",
           ] },
       ],
+      // Listening posts for the Hour of Knocking (21:00-22:00)
+      knockPosts: [
+        { id: 'rail',  x: 15.8, y: 10.2, label: 'rail',
+          pattern: [0, 620, 1500] },
+        { id: 'stone', x: 17,   y: 8,    label: 'listening stone',
+          pattern: [0, 450, 900, 1900] },
+      ],
+      // ── The residents (generic town-NPC system — see 11-game-townnpcs) ──
+      npcs: (() => {
+        // Compact painter helper shared by the Miedźno cast
+        const P = (g) => (x, y, w, h, c, a) => { g.fillStyle(c, a === undefined ? 1 : a); g.fillRect(x, y, w, h); };
+        const shadow = (g, w) => { g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 3, w, 5); };
+        const met = (id) => gameState.miedznoState.met[id];
+        const meet = (id) => { gameState.miedznoState.met[id] = true; try { saveGame(); } catch (e) {} };
+        return [
+          {
+            id: 'srulik', name: 'Srulik', x: 7.6, y: 19.4, hideAtNight: true,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 16);
+              px(-6, -20 - up, 12, 22 + up, 0x241c2a);          // long dark coat
+              px(-6, -20 - up, 12, 2, 0x2e2436);
+              px(-6, -2, 12, 2, 0x18121e);
+              px(-11, -13 - up, 6, 8, 0x6a4828);                // the ledger
+              px(-11, -13 - up, 6, 1, 0x8a6a3a);
+              px(-10, -11 - up, 4, 1, 0xd8c8a0);
+              px(-4, -27 - up, 8, 7, 0xc0a084);                 // head
+              px(-4, -21 - up, 8, 1, 0xa88a6e);
+              px(-4, -29 - up, 8, 3, 0x181420);                 // cap
+              px(-3, -20 - up, 6, 3, 0xe0dcc8);                 // short beard
+              px(4, -8, 2, 2, 0x1a1a2e);                        // inked fingers
+              px(-3, -25 - up, 2, 1, 0x241c14); px(1, -25 - up, 2, 1, 0x241c14);
+            },
+            dialogue() {
+              if (!met('srulik')) {
+                return { lines: [
+                  ">The keeper of the study house looks at you the way one reads a difficult ledger: twice.",
+                  "You have Elżbieta's knots in your walk. She wrote ahead. She always writes ahead.",
+                  "Yes — the hill. No — not now. The office counts everyone who climbs, and you have been counted once already today.",
+                  ">He shifts the ledger under his arm. His fingers are inked to the second knuckle.",
+                  "Lodge at The Ladder. Ask Cyla for the room that isn't rented. Tell her the braid sent you.",
+                  "And if you must know one thing about the hill tonight, know this: it was built kindly. Whatever they say now. It was built kindly, and it is very tired.",
+                  ">You sense that, given one more question, he would talk about the golem until winter. You keep the question.",
+                ], onClose: () => { meet('srulik'); try { addJournalEntry('srulik_referral'); } catch (e) {} } };
+              }
+              return { lines: [
+                "The Ladder. Cyla. The braid sent you — those five words open more doors here than any permit.",
+                "Go, before the office decides you're loitering with intellectuals.",
+              ] };
+            },
+          },
+          {
+            id: 'golda', name: 'Golda', x: 6.2, y: 16.3, hideAtNight: false, // the lamps burn all night
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 15);
+              px(-6, -18 - up, 12, 20 + up, 0x4a3a2e);          // wool dress
+              px(-6, -18 - up, 12, 2, 0x5a4838);
+              px(-7, -9, 3, 2, 0xffd890, 0.9);                  // the lamp in hand
+              px(-8, -12, 5, 4, 0x3a2818);
+              g.fillStyle(0xffd890, 0.18); g.fillCircle(-6, -10, 9);
+              px(-4, -25 - up, 8, 7, 0xb89478);                 // head
+              px(-5, -28 - up, 10, 4, 0x8a6a2a);                // amber scarf
+              px(-4, -29 - up, 8, 1, 0xa8843a);
+              px(-3, -23 - up, 2, 2, 0x241c14); px(1, -23 - up, 2, 2, 0x241c14);
+              px(-1, -19 - up, 3, 1, 0x8a5a44);
+            },
+            dialogue() {
+              if (!met('golda')) {
+                return { lines: [
+                  ">The lamp house glows through its seams — dozens of small flames behind glass, banked for the night that is always coming.",
+                  "Come in? No. Not yet. The lamps are particular about strangers.",
+                  "Every miner who ever went down has a lamp here. We keep them lit. The Regency calls it sentimental combustion. We call it attendance.",
+                  ">Through the doorway, one lamp at the back burns a colour the others don't.",
+                  "You saw nothing. Good. You'll do.",
+                ], onClose: () => meet('golda') };
+              }
+              return { lines: ["The lamps are counting. Don't interrupt them."] };
+            },
+          },
+          {
+            id: 'cyla', name: 'Cyla', x: 10.5, y: 16.3, hideAtNight: true,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 16);
+              px(-6, -19 - up, 12, 21 + up, 0x5a3a28);          // innkeeper apron brown
+              px(-5, -12 - up, 10, 9, 0xd0c09a);                // apron front
+              px(-5, -12 - up, 10, 1, 0xb0a07e);
+              px(-4, -26 - up, 8, 7, 0xc49a7a);                 // head
+              px(-5, -29 - up, 10, 4, 0x6a2430);                // madder kerchief
+              px(3, -26 - up, 2, 3, 0x561c28);                  // kerchief tail
+              px(-3, -24 - up, 2, 2, 0x241c14); px(1, -24 - up, 2, 2, 0x241c14);
+              px(-1, -20 - up, 3, 1, 0x8a4a34);                 // set mouth
+              px(6, -10 - up, 2, 4, 0x8a8a92);                  // key ring at her belt
+              g.lineStyle(1, 0x8a8a92, 1); g.strokeCircle(7, -12 - up, 2);
+            },
+            dialogue() {
+              if (!met('cyla')) {
+                return { lines: [
+                  "A room? We have rooms. We have one room I won't rent you, and now you'll want to know why, and I won't tell you, and you'll lodge here anyway just to wonder about it.",
+                  "That's how it works. It's good for business.",
+                  ">Her eyes go to your hand. She doesn't ask.",
+                  "Eleven years ago a woman lodged here who paid in advance and never checked out. The room stays hers. The Regency lists it as 'vacant — administrative'. I list it as none of their business.",
+                  "If the braid sent you — supper's at the bell, and the third stair creaks on purpose.",
+                ], onClose: () => meet('cyla') };
+              }
+              return { lines: ["Supper at the bell. Mind the third stair — it creaks on purpose."] };
+            },
+          },
+          {
+            id: 'hana', name: 'Hana', x: 11.5, y: 19.3, hideAtNight: true,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 16);
+              px(-6, -18 - up, 12, 20 + up, 0x7a4a2a);          // warm work dress
+              px(-6, -18 - up, 12, 2, 0x8a5a34);
+              px(-7, -12 - up, 3, 6, 0x7a4a2a);                 // strong forearms
+              px(7, -12 - up, 2, 6, 0x7a4a2a);
+              px(-7, -6 - up, 3, 2, 0xc49a7a); px(7, -6 - up, 2, 2, 0xc49a7a);
+              px(-6, -7 - up, 1, 1, 0x8a4a34); px(8, -8 - up, 1, 1, 0x8a4a34); // burn scars
+              px(-9, -10 - up, 3, 8, 0xd8c8a0);                 // the bread peel
+              px(-9, -18 - up, 2, 9, 0x8a6a3a);
+              px(-4, -25 - up, 8, 7, 0xc49a7a);                 // head
+              px(-5, -28 - up, 10, 4, 0xd0c09a);                // flour-dusted linen cap
+              px(-3, -23 - up, 2, 2, 0x241c14); px(1, -23 - up, 2, 2, 0x241c14);
+              px(-1, -19 - up, 4, 1, 0x9a5a3e);                 // warm mouth
+            },
+            dialogue() {
+              if (!met('hana')) {
+                return { lines: [
+                  "Bread? The first loaf's not for sale. It goes up the hill. Don't ask — or DO ask. I'm not the Regency. Asking is allowed here.",
+                  ">The kiln breathes heat at your back. Her forearms are a map of small healed burns.",
+                  "You want to be useful, come at baking hour and carry. The hill likes people who carry.",
+                  ">Above the kiln: a shelf of papers in a handwriting that only makes sense reflected in the polished side of the bread peel.",
+                  "Family recipes. Backwards ones. Keeps them... fresh.",
+                ], onClose: () => meet('hana') };
+              }
+              return { lines: ["Baking hour. Carry. The hill notices who carries."] };
+            },
+          },
+          {
+            id: 'mendel', name: 'Mendel', x: 13.6, y: 10.4, hideAtNight: false, // knocking hour is HIS hour
+            interactRadius: 1.9,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const tap = f === 1 ? 1 : 0;
+              shadow(g, 12);
+              // Small boy crouched, one ear toward the rail
+              px(-5, -12, 10, 13, 0x3a4a5a);                    // patched coat
+              px(-5, -12, 10, 1, 0x4a5a6a);
+              px(-1, -6, 3, 3, 0x2e3e4e);                       // patch
+              px(-4, -18, 8, 7, 0xd0a884);                      // head, tilted low
+              px(-4, -20, 8, 3, 0x2a1a0e);                      // mop of hair
+              px(-3, -15, 2, 2, 0x241c14); px(1, -15, 2, 2, 0x241c14);
+              // The tapping hand — knuckle down on the rail
+              px(5, -3 - tap, 3, 2, 0xd0a884);
+              px(4, -1, 6, 1, 0x8a92a0);                        // the rail
+            },
+            dialogue(scene) {
+              if (!met('mendel')) {
+                return { lines: [
+                  "You hear it?",
+                  ">The boy has one ear an inch from the rail and doesn't look up.",
+                  "It knocks. In the hour before the deep of night, it knocks. One — two — ... — three. Everyone thinks I'm counting carts.",
+                  "Listen FIRST. That's the whole secret. It knocks, then you knock back the same. Not fast. The same.",
+                  ">He taps the rail, soft: knock, knock — a held breath — knock.",
+                  "The grown-ups answer at their doors at knocking hour. But the rail hears better. Rails always hear better.",
+                ], onClose: () => meet('mendel') };
+              }
+              return { lines: [
+                "One — two — ... — three. You'll get it. The hill is patient. It's been practising for eleven years.",
+              ] };
+            },
+          },
+          {
+            id: 'vosk', name: 'Overseer Vosk', x: 4.5, y: 22.3, hideAtNight: true,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 15);
+              px(-6, -20 - up, 12, 22 + up, 0x6a7280);          // zinc-grey uniform
+              px(-6, -20 - up, 12, 2, 0x8a92a0);
+              px(-6, -12 - up, 12, 2, 0x5a3a70);                // bruised-purple sash
+              px(6, -14 - up, 3, 8, 0xe8e8e0);                  // the tally, always in hand
+              px(6, -14 - up, 3, 1, 0x8a92a0);
+              px(-4, -27 - up, 8, 7, 0xc8b09c);                 // composed face
+              px(-5, -30 - up, 10, 4, 0x6a7280);                // peaked cap
+              px(-2, -29 - up, 5, 1, 0x5a3a70);
+              px(-3, -25 - up, 2, 1, 0x241c14); px(1, -25 - up, 2, 1, 0x241c14); // level eyes
+              px(-1, -21 - up, 3, 1, 0x9a8474);                 // thin mouth
+            },
+            dialogue() {
+              if (!met('vosk')) {
+                return { lines: [
+                  ">The Overseer looks up at the exact moment you decide not to approach.",
+                  "Visitor. Your entry is logged; your permit is provisional; your presence is, for the moment, unobjectionable.",
+                  "Miedźno produces copper and nostalgia. We requisition the former and discourage the latter. You will find the distinction easy to respect.",
+                  ">Her pen does not stop. You realise it has not stopped once during the entire conversation.",
+                  "Enjoy the hill. It is scheduled.",
+                ], onClose: () => meet('vosk'), style: 'ornate' };
+              }
+              return { lines: ["Still unobjectionable. Keep it so."], style: 'ornate' };
+            },
+          },
+          {
+            id: 'pin', name: 'Enumerator Pin', x: 3.6, y: 12.6, hideAtNight: true,
+            draw(scene, g, f) {
+              g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
+              shadow(g, 13);
+              px(-5, -17 - up, 10, 19 + up, 0x7a828e);          // junior grey, ill-fitting
+              px(-5, -17 - up, 10, 1, 0x8a92a0);
+              px(-8, -11 - up, 4, 6, 0xe8e8e0);                 // clipboard hugged close
+              px(-8, -11 - up, 4, 1, 0x6a7280);
+              px(3, -8, 2, 2, 0x1a1a2e);                        // ink to the second knuckle
+              px(-4, -24 - up, 8, 7, 0xd0b49a);                 // young face
+              px(-4, -26 - up, 8, 2, 0x4a3a2a);                 // untidy hair
+              px(-3, -22 - up, 2, 2, 0x241c14); px(1, -22 - up, 2, 2, 0x241c14);
+              px(-1, -18 - up, 2, 1, 0x9a6a54);                 // uncertain mouth
+            },
+            dialogue() {
+              if (!met('pin')) {
+                return { lines: [
+                  ">The Enumerator's fingers are inked to the second knuckle. He is recounting a column he has plainly already counted.",
+                  "Oh — don't mind me. Four hundred and— hm. Hm. It's the sevens. The sevens in this town go missing.",
+                  ">He looks at you one moment too long. Then he writes something down that is not a seven.",
+                  "If anyone asks: you were never counted.",
+                ], onClose: () => meet('pin') };
+              }
+              return { lines: ["You were never counted. Keep walking."] };
+            },
+          },
+        ];
+      })(),
       travels: [
         { x: 1.5, y: 11.5, radius: 1.4, to: 'wyrdow',
           prompt: '[E] Take the west road home to Wyrdów',
@@ -481,33 +701,6 @@ const TOWNS = {
         q._sortY = cr.y;
         scene.objectLayer.add(q);
 
-        // ── SRULIK — keeper of the study house, ledger under his arm ──
-        const sk = at(7.6, 19.1);
-        const sr = scene.add.graphics();
-        sr.fillStyle(0x000000, 0.3); sr.fillEllipse(sk.x, sk.y + 3, 16, 5);
-        // Long dark coat, narrow shoulders
-        sr.fillRect && sr.fillStyle(0x241c2a, 1);
-        sr.fillRect(sk.x - 6, sk.y - 20, 12, 22);
-        sr.fillStyle(0x2e2436, 1); sr.fillRect(sk.x - 6, sk.y - 20, 12, 2);
-        sr.fillStyle(0x18121e, 1); sr.fillRect(sk.x - 6, sk.y - 2, 12, 2);
-        // The ledger under the left arm — thick, corner-worn
-        sr.fillStyle(0x6a4828, 1); sr.fillRect(sk.x - 11, sk.y - 13, 6, 8);
-        sr.fillStyle(0x8a6a3a, 1); sr.fillRect(sk.x - 11, sk.y - 13, 6, 1);
-        sr.fillStyle(0xd8c8a0, 1); sr.fillRect(sk.x - 10, sk.y - 11, 4, 1);
-        // Head — pale, tired, kind
-        sr.fillStyle(0xc0a084, 1); sr.fillRect(sk.x - 4, sk.y - 27, 8, 7);
-        sr.fillStyle(0xa88a6e, 1); sr.fillRect(sk.x - 4, sk.y - 21, 8, 1);
-        // Dark cap sitting far back
-        sr.fillStyle(0x181420, 1); sr.fillRect(sk.x - 4, sk.y - 29, 8, 3);
-        // Short white beard + ink-stained fingertips
-        sr.fillStyle(0xe0dcc8, 1); sr.fillRect(sk.x - 3, sk.y - 20, 6, 3);
-        sr.fillStyle(0x1a1a2e, 1); sr.fillRect(sk.x + 4, sk.y - 8, 2, 2);
-        // Eyes — reading you, twice
-        sr.fillStyle(0x241c14, 1);
-        sr.fillRect(sk.x - 3, sk.y - 25, 2, 1); sr.fillRect(sk.x + 1, sk.y - 25, 2, 1);
-        sr._sortY = sk.y;
-        scene.objectLayer.add(sr);
-
         // ── Pines on the west approach ──
         const pg = scene.add.graphics();
         [[4, 8.6], [7, 9.2], [10, 8.4], [4, 14.6], [8, 15.2]].forEach(([px, py]) => {
@@ -646,6 +839,12 @@ const gameState = {
   act1Complete: false,        // true only after the title card has played
   worldItemsTaken: [],        // ids of picked-up ground items (persisted)
   currentTown: 'wyrdow',      // active TownDefinition id (Phase B)
+
+  // ── Miedźno (Act 2) ──
+  miedznoState: {
+    met: {},                  // npc id -> true after first talk
+    knocksAnswered: [],       // knock post ids answered during the hour
+  },
   regencyFired: {},           // per-trigger dedupe map; keys set true after firing
 
   // ── Ezra the Cobbler ──
@@ -712,7 +911,7 @@ const TOWN_SCOPED_FIELDS = [
   'domovoiState', 'dziadekState', 'martaState', 'knotsPlaced',
   'questActive', 'questComplete', 'codexFragmentCollected', 'babaMetOnce',
   'knotsGiven', 'zuzkaMetOnce', 'zuzkaSecondTalk', 'zuzkaFarewellDone',
-  'firstVillageEntry',
+  'firstVillageEntry', 'miedznoState',
 ];
 function townKeyOf(townId) {
   const def = TOWNS[townId || gameState.currentTown || 'wyrdow'];
@@ -899,6 +1098,18 @@ const JOURNAL_ENTRIES = {
     text: "The roads straightened. Not dramatically \u2014 just became more certain about where they go. Po\u0142udnica appeared at noon and looked at my hand and nodded. Baba El\u017Cbieta\u2019s bells rang on their own. I think I did something real today.",
   },
 };
+
+// ── Miedźno entries (Act 2) — grouped under M I E D Ź N O in the journal ──
+Object.assign(JOURNAL_ENTRIES, {
+  srulik_referral: {
+    title: 'Srulik: Written Ahead', type: 'npc', category: 'Conversation', town: 'miedzno',
+    text: "The keeper of the study house read me twice before speaking once. Baba wrote ahead — she always writes ahead. He would not talk about the hill with the office watching, but he said one thing anyway, quietly, like a man leaving a door unlocked: it was built kindly. And it is very tired.",
+  },
+  knock_first: {
+    title: 'The Hill Knocks Back', type: 'observe', category: 'Discovery', town: 'miedzno',
+    text: "In the hour before the deep of night, something under Miedźno knocks. Mendel taught me the whole secret in one sentence: listen first, then knock back the same. Not fast. The same. I answered at the rail and the rail answered back — and something very large shifted its attention half a degree toward me.",
+  },
+});
 
 // ── CUSTOMS — the folklore appendix (Black Book's most-loved idea) ──
 // Unlocked when a ritual completes: what the custom IS, in the world's

@@ -28,6 +28,10 @@ class GameScene extends Phaser.Scene {
     // with their own compact build/update path (LBA mandate)
     this.town = activeTown();
     this._transitioning = false; // reset on every (re)build — travel/doors set it
+    // scene.restart destroys all cameras — the UI camera must be rebuilt,
+    // not reused, or every fixed-position element silently vanishes
+    this._uiCam = null;
+    this.children.addCallback = null;
     if (this.town.isInterior) { this.createInterior(); return; }
 
     this.cameras.main.setBackgroundColor(PAL.sky);
@@ -91,9 +95,10 @@ class GameScene extends Phaser.Scene {
       this.drawAbandonedInnDetails();
       this.createBackgroundVillagers();
     } else if (this.town.dress) {
-      // Non-Wyrdów towns dress themselves (stub scenery until Phase C)
+      // Non-Wyrdów towns dress themselves + get data-driven NPCs
       this.town.dress(this);
     }
+    this.createTownNpcs();
     this.createPlayer();
     // Returning from an interior (or travelling): spawn where the door says
     if (this._spawnOverride) {
@@ -420,6 +425,9 @@ class GameScene extends Phaser.Scene {
     this.handleMovement(delta);
     this.updateFootsteps();
     this.updateViewVeil();
+    this.updateTownNpcs(time, delta);
+    this.updateHeartbeatAmbience(time);
+    if (this._knock) this._updateKnockSession(time);
     if (isWyrdow) {
       this.updateNightRoads(time, delta);
       this.updateThreadGuidance(time, delta);
