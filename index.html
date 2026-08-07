@@ -325,6 +325,66 @@ const TOWNS = {
     ],
   },
 
+  // ── INTERIOR: Baba Elżbieta's house ────────────────────────────────
+  // An interior is just a small TownDefinition (LBA mandate). One room:
+  // braids on the wall, jar shelves, the covered drawing Zuzka mentioned.
+  baba_house_interior: {
+    id: 'baba_house_interior',
+    name: "Baba Elżbieta's House",
+    subtitle: 'It leans toward what is true',
+    isInterior: true,
+    size: 10,
+    map: (() => {
+      // 10x10 grid: ring of wall (3), floor (0) inside, doorway gap south
+      const g = [];
+      for (let y = 0; y < 10; y++) {
+        g[y] = [];
+        for (let x = 0; x < 10; x++) {
+          g[y][x] = (x === 0 || y === 0 || x === 9 || y === 9) ? 3 : 0;
+        }
+      }
+      g[9][4] = 0; g[9][5] = 0; // doorway
+      return g;
+    })(),
+    entry: { x: 4.5, y: 7.6 },              // spawn just inside the door
+    exit: { x: 4.5, y: 8.6, radius: 0.7,    // step back through the door
+            to: 'wyrdow', spawn: { x: 16.5, y: 12.0 } },
+    // Examine points — LBA's poke-everything density, spoken in the
+    // traveller's voice. The covered frame earns a journal entry.
+    examine: [
+      { x: 7.6, y: 1.9, radius: 1.2, prompt: '[E] The covered frame',
+        name: 'The Covered Frame', journal: 'observe_drawing',
+        lines: [
+          ">You lift the corner of the cloth, the way Zuzka once did.",
+          ">A charcoal drawing of a hand. On the palm, drawn with more care than anything else in this careful house, is your mark.",
+          ">You put the cloth back exactly as you found it. Almost exactly.",
+        ] },
+      { x: 5.8, y: 1.9, radius: 1.2, prompt: '[E] The braids',
+        name: 'The Braid Wall',
+        lines: [
+          ">Seven braids hang from the pegs. Each one is someone's fate, read and kept.",
+          ">One is burnt short. You decide not to ask which year that was.",
+        ] },
+      { x: 2.2, y: 1.9, radius: 1.2, prompt: '[E] The stove',
+        name: 'The Hearth',
+        lines: [
+          ">The ember never quite goes out. Baba says the day it does, she'll finally sleep in.",
+        ] },
+      { x: 5, y: 4.5, radius: 1.1, prompt: '[E] The reading dish',
+        name: 'The Reading Dish',
+        lines: [
+          ">The dish holds fine grey ash. It smells faintly of someone's future.",
+        ] },
+      { x: 7.8, y: 7, radius: 1.1, prompt: '[E] The quilt',
+        name: 'The Quilt',
+        lines: [
+          ">The quilt is pieced from four different lives. The stitching is furious and precise.",
+          ">Stitched Circle work. Nothing wasted, nothing forgotten.",
+        ] },
+    ],
+    babaHomeAtNight: true,   // she sleeps here — village sprite hides after dusk
+  },
+
   // ── MIEDŹNO — the Copper Hill, v1 topology (Phase C per TOWN2_BRIEF) ──
   // The hill is not a hill. NE quadrant: the Sleeper's mass with a
   // switchback terrace path. Town in the crook of its arm. Requisition
@@ -2480,6 +2540,7 @@ class GameScene extends Phaser.Scene {
     this.drawAtmosphere();
     this.createDialogueUI();
     this.sortObjects();
+    this._setupUICamera();
 
     // Controls
     // Arrow keys + WASD both drive movement. Wrap the two key sets in
@@ -6203,6 +6264,8 @@ class GameScene extends Phaser.Scene {
       this._interiorBaba = { x: 3.2, y: 3.4 };
     }
 
+    this._setupUICamera();
+
     // Room name whisper, top-left
     const label = this.add.text(16, 22, T.name, {
       fontFamily: 'Georgia, serif', fontSize: '16px', color: '#c8a86a',
@@ -7355,6 +7418,32 @@ class GameScene extends Phaser.Scene {
     const settings  = makeOpt('Settings',       py + 128, () => this._openPauseSettings());
     const ret       = makeOpt('Return to Menu', py + 170, () => this._returnToMenu());
     const closeGame = makeOpt('Close Game',     py + 212, () => this._closeGame());
+    // Keyboard nav — a keyboard-first game deserves a keyboard pause menu
+    const opts = [
+      { t: resume, act: () => this._closePauseMenu() },
+      { t: settings, act: () => this._openPauseSettings() },
+      { t: ret, act: () => this._returnToMenu() },
+      { t: closeGame, act: () => this._closeGame() },
+    ];
+    let sel = 0;
+    const marker = this.add.text(0, 0, '\u25c6', {
+      fontFamily: 'Georgia, serif', fontSize: '13px', color: '#c8922a',
+    }).setOrigin(0.5).setScrollFactor(0);
+    const syncSel = () => {
+      opts.forEach((o, i) => o.t.setColor(i === sel ? '#c8922a' : '#e8dfc0'));
+      const t = opts[sel].t;
+      marker.setPosition(t.x - t.displayWidth / 2 - 18, t.y);
+    };
+    syncSel();
+    const pkey = (e) => {
+      if (this._pauseSettingsOpen) return;
+      const k = e.key;
+      if (k === 'ArrowUp' || k === 'Up') { sel = (sel + opts.length - 1) % opts.length; syncSel(); }
+      else if (k === 'ArrowDown' || k === 'Down') { sel = (sel + 1) % opts.length; syncSel(); }
+      else if (k === 'e' || k === 'E' || k === 'Enter') { opts[sel].act(); }
+    };
+    this.input.keyboard.on('keydown', pkey);
+    this._pauseKeyHandler = pkey;
     const hint = this.add.text(W / 2, py + ph - 22, 'Esc to resume', {
       fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic', color: '#a89878',
     }).setOrigin(0.5);
@@ -7363,7 +7452,7 @@ class GameScene extends Phaser.Scene {
       fontFamily: 'Georgia, serif', fontSize: '12px', fontStyle: 'italic',
       color: '#c8b878', wordWrap: { width: pw - 40 }, align: 'center',
     }).setOrigin(0.5);
-    layer.add([dim, panel, title, resume, settings, ret, closeGame, hint, this._pauseCloseMsg]);
+    layer.add([dim, panel, title, resume, settings, ret, closeGame, hint, marker, this._pauseCloseMsg]);
     this._pauseLayer = layer;
     this.physics && this.physics.world && this.physics.world.pause && this.physics.world.pause();
   }
@@ -7386,6 +7475,10 @@ class GameScene extends Phaser.Scene {
   }
   _closePauseMenu() {
     if (!this._pauseLayer) return;
+    if (this._pauseKeyHandler) {
+      this.input.keyboard.off('keydown', this._pauseKeyHandler);
+      this._pauseKeyHandler = null;
+    }
     this._pauseLayer.destroy(); this._pauseLayer = null;
     this.physics && this.physics.world && this.physics.world.resume && this.physics.world.resume();
   }
@@ -10375,7 +10468,7 @@ class GameScene extends Phaser.Scene {
     dx /= len; dy /= len;
     // Stance speed: Quiet Step overrides Hurried — you cannot rush quietly
     const stanceMul = this._stanceQuiet ? 0.55
-      : (this.briskKey && this.briskKey.isDown ? 1.35 : 1);
+      : (this.briskKey && this.briskKey.isDown ? 1.5 : 1);
     const speed = this.moveSpeed * stanceMul * (delta / 16);
     const newX = this.playerCartX + dx * speed;
     const newY = this.playerCartY + dy * speed;
@@ -10701,7 +10794,12 @@ class GameScene extends Phaser.Scene {
     const zdy = this.playerCartY - ZUZKA.cartY;
     const zuzkaDist = Math.sqrt(zdx * zdx + zdy * zdy);
 
-    if (babaDist <= BABA.interactRadius
+    // An unplaced quest marker in reach outranks small talk — the knot
+    // "Behind Baba's House" sits 1.3 tiles from Baba herself
+    const markerInReach = gameState.knotsGiven && gameState.knotsPlaced < 5
+      && MARKERS.some(mk => !mk.placed
+        && Math.hypot(this.playerCartX - mk.x, this.playerCartY - mk.y) <= 2.0);
+    if (babaDist <= BABA.interactRadius && !markerInReach
       && this.babaSprite && this.babaSprite.visible) {
       // (after dusk she's indoors — enter the house to find her)
       const iso = cartToIso(BABA.cartX, BABA.cartY);
@@ -12474,6 +12572,51 @@ class GameScene extends Phaser.Scene {
     const targetY = iso.y + this.worldOffset.y - cam.height / 2;
     cam.scrollX += (targetX - cam.scrollX) * 0.08;
     cam.scrollY += (targetY - cam.scrollY) * 0.08;
+  }
+
+  // ── UI CAMERA ──────────────────────────────────────────────────────
+  // The gameplay camera zooms (1.3-2.1 outside, 2.1 in interiors), which
+  // dragged every fixed-position element — dialogue box, HUD, journal,
+  // pause menu — off the screen edges. UI now renders through its own
+  // unzoomed camera: the main camera ignores UI, the UI camera ignores
+  // the world. Register late-created UI via _registerUI().
+  _setupUICamera() {
+    if (this._uiCam) return;
+    // Anything created later with scrollFactor 0 is UI by definition —
+    // catch it at creation so journal/pause/portraits/toasts need no
+    // per-call bookkeeping.
+    this.children.addCallback = (obj) => {
+      if (!this._uiCam) return;
+      if (obj.scrollFactorX === 0 && obj.scrollFactorY === 0) this._registerUI(obj);
+      else { try { this._uiCam.ignore(obj); } catch (e) {} }
+    };
+    const cam = this.cameras.main;
+    this._uiCam = this.cameras.add(0, 0, cam.width || 1280, cam.height || 720);
+    this._uiCam.setScroll(0, 0);
+    this._uiCam.transparent = true;
+    this._uiObjects = [];
+    // Keep the UI camera the size of the window (Scale.RESIZE mode)
+    this.scale.on('resize', (size) => {
+      if (this._uiCam) this._uiCam.setSize(size.width, size.height);
+    });
+    // Everything currently in the display list is world; UI opts in later
+    this.children.list.forEach(o => {
+      if (o.scrollFactorX === 0 && o.scrollFactorY === 0) this._registerUI(o);
+      else { try { this._uiCam.ignore(o); } catch (e) {} }
+    });
+    // Layer containers are always world
+    [this.groundLayer, this.lightLayer, this.objectLayer, this.particleLayer]
+      .forEach(l => { if (l) { try { this._uiCam.ignore(l); } catch (e) {} } });
+  }
+
+  // Route a UI object to the UI camera (hidden from the world camera).
+  _registerUI(obj) {
+    if (!obj || !this._uiCam) return obj;
+    try {
+      this.cameras.main.ignore(obj);
+      if (!this._uiObjects.includes(obj)) this._uiObjects.push(obj);
+    } catch (e) {}
+    return obj;
   }
 
   // ── VIEW VEIL — the lantern-radius of knowing ─────────────────────
