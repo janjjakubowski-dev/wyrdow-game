@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wyrdów</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230e0e14'/%3E%3Cpath d='M16 5 L25 16 L16 27 L7 16 Z' fill='%23c8922a'/%3E%3Cpath d='M16 10 L21 16 L16 22 L11 16 Z' fill='%230e0e14'/%3E%3C/svg%3E">
+<meta name="description" content="Wyrdów — a folk-fantasy adventure at the crossroads. Five roads, one idol, and a cure the world was made to forget.">
+<meta property="og:title" content="Wyrdów">
+<meta property="og:description" content="A folk-fantasy adventure at the crossroads. Five roads, one idol, and a cure the world was made to forget.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/assets/images/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0e0e14;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  canvas { display: block; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+<!-- Touch-device notice: the game is keyboard-driven, so warn phone
+     visitors gracefully instead of soft-locking them at the menu. -->
+<div id="mobile-notice" style="display:none; position:fixed; inset:0; z-index:999; background:#0e0e14; align-items:center; justify-content:center; font-family:Georgia,serif;">
+  <div style="max-width:340px; margin:0 20px; padding:36px 28px; background:#1a1410; border:1px solid rgba(200,146,42,.6); border-radius:6px; text-align:center;">
+    <div style="letter-spacing:.35em; color:#c8922a; font-size:20px; margin-bottom:6px;">WYRDÓW</div>
+    <div style="color:#8a6a40; font-size:11px; margin-bottom:22px;">◆ ─────── ◆</div>
+    <p style="color:#e8dfc0; font-size:15px; line-height:1.6; margin-bottom:12px;">Wyrdów is best travelled with a&nbsp;keyboard.</p>
+    <p style="color:#a89878; font-style:italic; font-size:13px; line-height:1.6; margin-bottom:26px;">Touch controls are provided, but the roads are easier to walk on a&nbsp;computer.</p>
+    <button id="mobile-continue" style="background:none; border:1px solid rgba(200,146,42,.5); border-radius:4px; color:#c8922a; font-family:Georgia,serif; font-size:13px; padding:8px 18px; cursor:pointer;">Continue with touch</button>
+  </div>
+</div>
+<script>
+// Show the notice only on touch-first devices (no fine pointer attached)
+(function () {
+  try {
+    var n = document.getElementById('mobile-notice');
+    var isTouch = window.matchMedia('(pointer: coarse)').matches
+               && !window.matchMedia('(pointer: fine)').matches;
+    document.getElementById('mobile-continue').addEventListener('click', function () {
+      n.style.display = 'none';
+      var tc = document.getElementById('touch-controls');
+      if (tc && isTouch) tc.style.display = 'block';
+    });
+    if (isTouch) n.style.display = 'flex';
+  } catch (e) {}
+})();
+
+// ── TOUCH CONTROLS ──────────────────────────────────────────────────
+// A virtual joystick (left) and action buttons (right) that synthesize
+// the same keyboard events the game already listens for — the entire
+// input layer (movement, E-interact, O-observe, journal, pause,
+// dialogue choices) works unchanged.
+(function () {
+  var wrap = document.createElement('div');
+  wrap.id = 'touch-controls';
+  wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:50; pointer-events:none; font-family:Georgia,serif; -webkit-user-select:none; user-select:none;';
+  wrap.innerHTML =
+    '<div id="tc-stick" style="pointer-events:auto; position:absolute; left:24px; bottom:28px; width:128px; height:128px; border-radius:50%; background:rgba(14,14,20,.35); border:1px solid rgba(200,146,42,.35);">' +
+      '<div id="tc-thumb" style="position:absolute; left:44px; top:44px; width:40px; height:40px; border-radius:50%; background:rgba(200,146,42,.45); border:1px solid rgba(200,146,42,.7);"></div>' +
+    '</div>' +
+    '<div style="pointer-events:auto; position:absolute; right:20px; bottom:28px; display:flex; flex-direction:column; gap:10px; align-items:flex-end;">' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="tc-btn" data-key="1|Digit1|49" style="width:40px;height:40px;">1</button>' +
+        '<button class="tc-btn" data-key="2|Digit2|50" style="width:40px;height:40px;">2</button>' +
+        '<button class="tc-btn" data-key="3|Digit3|51" style="width:40px;height:40px;">3</button>' +
+      '</div>' +
+      '<div style="display:flex; gap:10px; align-items:flex-end;">' +
+        '<button class="tc-btn" data-key="j|KeyJ|74" style="width:48px;height:48px;">J</button>' +
+        '<button class="tc-btn" data-key="o|KeyO|79" data-hold="1" style="width:56px;height:56px;">O</button>' +
+        '<button class="tc-btn" data-key="e|KeyE|69" style="width:64px;height:64px;font-size:20px;">E</button>' +
+      '</div>' +
+      '<button class="tc-btn" data-key="Escape|Escape|27" style="width:40px;height:40px;">☰</button>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  // Shared button styling
+  var style = document.createElement('style');
+  style.textContent = '.tc-btn{background:rgba(14,14,20,.5); border:1px solid rgba(200,146,42,.5); border-radius:50%; color:#c8922a; font-family:Georgia,serif; font-size:16px; touch-action:none;} .tc-btn:active{background:rgba(200,146,42,.35);}';
+  document.head.appendChild(style);
+
+  function kev(type, key, code, keyCode) {
+    window.dispatchEvent(new KeyboardEvent(type, {
+      key: key, code: code, keyCode: keyCode, which: keyCode,
+      bubbles: true, cancelable: true,
+    }));
+  }
+  // Action buttons — tap = keydown, release = keyup (hold works for O)
+  wrap.querySelectorAll('.tc-btn').forEach(function (btn) {
+    var parts = btn.getAttribute('data-key').split('|');
+    var key = parts[0], code = parts[1], kc = parseInt(parts[2], 10);
+    var down = function (ev) { ev.preventDefault(); kev('keydown', key, code, kc); };
+    var up = function (ev) { ev.preventDefault(); kev('keyup', key, code, kc); };
+    btn.addEventListener('touchstart', down, { passive: false });
+    btn.addEventListener('touchend', up, { passive: false });
+    btn.addEventListener('touchcancel', up, { passive: false });
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('mouseup', up);
+  });
+
+  // Virtual joystick — vector → four synthetic arrow-key states
+  var stick = wrap.querySelector('#tc-stick');
+  var thumb = wrap.querySelector('#tc-thumb');
+  var dirState = { up: false, down: false, left: false, right: false };
+  var DIRS = {
+    up:    ['ArrowUp', 'ArrowUp', 38],
+    down:  ['ArrowDown', 'ArrowDown', 40],
+    left:  ['ArrowLeft', 'ArrowLeft', 37],
+    right: ['ArrowRight', 'ArrowRight', 39],
+  };
+  function setDir(name, active) {
+    if (dirState[name] === active) return;
+    dirState[name] = active;
+    var d = DIRS[name];
+    kev(active ? 'keydown' : 'keyup', d[0], d[1], d[2]);
+  }
+  function releaseAll() {
+    for (var k in dirState) setDir(k, false);
+    thumb.style.left = '44px'; thumb.style.top = '44px';
+  }
+  function handle(ev) {
+    ev.preventDefault();
+    var touch = ev.touches ? ev.touches[0] : ev;
+    var r = stick.getBoundingClientRect();
+    var dx = touch.clientX - (r.left + r.width / 2);
+    var dy = touch.clientY - (r.top + r.height / 2);
+    var len = Math.hypot(dx, dy);
+    var max = r.width / 2 - 20;
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    thumb.style.left = (44 + dx) + 'px';
+    thumb.style.top = (44 + dy) + 'px';
+    var dead = 12;
+    setDir('up',    dy < -dead);
+    setDir('down',  dy >  dead);
+    setDir('left',  dx < -dead);
+    setDir('right', dx >  dead);
+  }
+  stick.addEventListener('touchstart', handle, { passive: false });
+  stick.addEventListener('touchmove', handle, { passive: false });
+  stick.addEventListener('touchend', function (ev) { ev.preventDefault(); releaseAll(); }, { passive: false });
+  stick.addEventListener('touchcancel', releaseAll);
+})();
+</script>
+<script>@@GAME@@</script>
+</body>
+</html>
