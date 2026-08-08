@@ -510,7 +510,7 @@ class MainMenuScene extends Phaser.Scene {
       gameState.brelMode = 'neutral'; gameState.brelArrivalDelay = 0;
       gameState._noonBellRung = false;
       gameState.currentTown = 'wyrdow';
-      gameState.miedznoState = { met: {}, knocksAnswered: [] };
+      gameState.miedznoState = { met: {}, knocksAnswered: [], strokes: { flame: false, breath: false, bread: false } };
       gameState.gameHour = 8.0;
       // MARKERS is a module const — its placed flags survive Return to
       // Menu and made replayed quests unwinnable until page refresh

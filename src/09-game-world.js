@@ -1755,6 +1755,16 @@ Object.assign(GameScene.prototype, {
   _classifyForCameras(obj, forceWorld) {
     if (!obj || !this._uiCam) return obj;
     try {
+      // Objects inside a container carry NO routing bits of their own —
+      // cameras filter container children individually, so a stale stamp
+      // (from before the object was containerised) silently blanks it.
+      // The container's own classification decides for the whole family.
+      if (obj.parentContainer) {
+        obj.cameraFilter &= ~(this.cameras.main.id | this._uiCam.id);
+        const idx = this._uiObjects.indexOf(obj);
+        if (idx >= 0) this._uiObjects.splice(idx, 1);
+        return obj;
+      }
       const isUI = !forceWorld && obj.scrollFactorX === 0
         && obj.scrollFactorY === 0 && obj.depth >= 0;
       // Clear both routing bits, then set exactly one

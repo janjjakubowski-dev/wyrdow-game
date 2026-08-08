@@ -621,7 +621,14 @@ const TOWNS = {
               "The Regency inventoried this room twice. Both times, their count came out one lamp short. Their ledgers cannot see it.",
               ">She sets down the scissors, finally, and looks at you.",
               "We don't know whose it is. We keep attendance anyway. That's the whole of religion, if you ask me, which nobody does.",
-            ], onClose: () => { ms.goldaOddLampTalk = true; try { addJournalEntry('lamp_odd'); } catch (e) {} try { saveGame(); } catch (e) {} }, };
+              ">From under the attendance ledger she takes a worn copper stylus and folds your fingers around it.",
+              "When you climb — and you will climb, you have that kind of face — the first stroke is the flame's. A yod, above. Small. The way a lamp looks from far off.",
+            ], onClose: () => {
+              ms.goldaOddLampTalk = true;
+              miedznoStrokes().flame = true;
+              try { addJournalEntry('lamp_odd'); addJournalEntry('stroke_flame'); } catch (e) {}
+              try { saveGame(); } catch (e) {}
+            }, };
           }
           return { lines: [
             "Mind your sleeves near the flames. These lamps have opinions about visitors' coats.",
@@ -825,10 +832,66 @@ const TOWNS = {
         { x: 3.5, y: 22.05, radius: 0.55, to: 'records_interior',
           prompt: '[E] Enter the Requisition Office' },
       ],
-      // First voice of the Copper Hill — three examine beats + Srulik
+      // First voice of the Copper Hill — examine beats + the climb
       examines: [
+        // The climb — only once all three strokes are taught
+        { x: 18, y: 4.4, radius: 1.6, prompt: '[E] Touch the eyelid',
+          name: 'The Sleeper',
+          requires: () => {
+            const st = miedznoStrokes();
+            return st.flame && st.breath && st.bread && !gameState.miedznoState.eyeOpened;
+          },
+          lines: [
+            ">The clay is warm. Under your palm, very far down, something turns its attention upward.",
+            ">You take out the copper stylus, and you write, the way three people taught you.",
+            ">The flame's stroke, small, above — Golda's yod. A lamp seen from far off.",
+            ">The breath's stroke, the long slow diagonal — Srulik's line, drawn at the pace of a sleeper's chest.",
+            ">The bread's stroke, small, below — Hana's yod. The crumb that is torn first and given first.",
+            ">Aleph. The letter closes. And the hill opens its eye.",
+            ">It is not like being seen. It is like being COUNTED — by something that has never once lost count of anyone.",
+            ">In the amber of the iris, seven names hang arranged like a recipe. You know, without being told, how they are to be taken: read reflected. Attended nightly. Answered the same, not fast.",
+            ">The seventh name is not written yet. The eye holds your gaze a moment on that empty line — not a threat. A vacancy. ADMINISTRATIVE.",
+            ">Then the lid comes down, slow, a sleeper turning over. And the tear-streak, for the first time in eleven years, is dry.",
+          ],
+          action(scene) {
+            scene.openDialogue('The Sleeper', this.lines, () => {
+              gameState.miedznoState.eyeOpened = true;
+              gameState.miedznoState.fragment2Collected = true;
+              try { addJournalEntry('sleeper_eye'); addJournalEntry('fragment_two'); } catch (e) {}
+              try { saveGame(); } catch (e) {}
+              try { scene.showItemNotification('The second fragment of the Cure Codex — the names — is yours.'); } catch (e) {}
+              // The hill exhales: one slow verdigris bloom over the eye
+              try {
+                const iso = cartToIso(18, 4.4);
+                const wx = iso.x + scene.worldOffset.x, wy = iso.y + scene.worldOffset.y - 30;
+                const flare = scene.add.graphics().setDepth(997);
+                const proxy = { t: 0 };
+                scene.tweens.add({
+                  targets: proxy, t: 1, duration: 4200, ease: 'Sine.easeOut',
+                  onUpdate: () => {
+                    flare.clear();
+                    flare.fillStyle(0x5ec0a4, 0.4 * (1 - proxy.t));
+                    flare.fillCircle(wx, wy, 14 + proxy.t * 90);
+                    flare.fillStyle(0xffd890, 0.5 * (1 - proxy.t));
+                    flare.fillEllipse(wx, wy, 30 * (1 - proxy.t * 0.4), 12 * (1 - proxy.t * 0.4));
+                  },
+                  onComplete: () => flare.destroy(),
+                });
+                scene.playKnockThump && scene.playKnockThump(true);
+              } catch (e) {}
+            }, 'ornate');
+          } },
+        // After — the world remembers what happened here
+        { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The eyelid',
+          name: 'The Sleeper',
+          requires: () => gameState.miedznoState.eyeOpened,
+          lines: [
+            ">Closed again — but differently. The way a door is shut when someone means to come back through it.",
+            ">The clay under your palm is warm, and the warmth follows your hand.",
+          ] },
         { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The tear-streak',
           name: 'The Tear-Streak',
+          requires: () => !gameState.miedznoState.eyeOpened,
           lines: [
             ">The verdigris streak runs from the closed eye, as if the hill has been crying very slowly for a very long time.",
             ">Up close, the eyelid is not rock. It is clay. And it is warm.",
@@ -838,6 +901,19 @@ const TOWNS = {
           lines: [
             ">Bread crumbs on a stone ledge by the sealed gate. Someone still tears a crust for the Skarbnik, quota or no quota.",
           ] },
+        { x: 12.8, y: 17.8, radius: 1.2, prompt: '[E] The recipe shelf',
+          name: 'The Recipe Shelf',
+          requires: () => gameState.miedznoState.met.hana,
+          lines: [
+            ">Above the kiln's mouth: papers in a hand that refuses to resolve — until you catch them in the polished flat of the bread peel.",
+            ">Reflected, they are recipes. Plain ones. Rye, water, salt, a stone of the oven's own. And under each, a name, and under each name: 'first loaf down.'",
+            ">Written backwards, for a reader on the other side of the surface.",
+          ],
+          action(scene) {
+            gameState.miedznoState.sawMirrorRecipes = true;
+            try { saveGame(); } catch (e) {}
+            scene.openDialogue('The Recipe Shelf', this.lines, null, 'simple');
+          } },
         { x: 6, y: 19.2, radius: 1.5, prompt: '[E] The crucible',
           name: 'The Crucible',
           lines: [
@@ -879,6 +955,22 @@ const TOWNS = {
               px(-3, -25 - up, 2, 1, 0x241c14); px(1, -25 - up, 2, 1, 0x241c14);
             },
             dialogue() {
+              const st = miedznoStrokes();
+              if (met('srulik') && (gameState.miedznoState.knocksAnswered || []).length > 0 && !st.breath) {
+                return { lines: [
+                  ">He is waiting for you outside the study house, ledger shut. He has heard.",
+                  "You answered it. At the rail, at the stone — it doesn't matter where. It knocked, and you knocked back the same, and now I am done pretending this is a hill.",
+                  ">He sits down on the study house step, suddenly an old man.",
+                  "The town built him. Before the Collapse. Every family gave copper; every family gave a name to be written into the clay. My grandfather held the pen. It was never meant to mine — it was meant to CARRY us out, all of us, the day the seam failed.",
+                  "The seam failed early. He was not finished waking. So he lay down over it — over the whole mine, sixty men still under — and he held. He is still holding. Eleven years, and the Regency calls it geology.",
+                  ">His inked fingers make one slow stroke in the air: a long diagonal, drawn at the pace of a sleeper's chest.",
+                  "The second stroke is breath. When you write it, write it SLOW. He has earned a slow hand.",
+                ], onClose: () => {
+                  st.breath = true;
+                  try { addJournalEntry('stroke_breath'); } catch (e) {}
+                  try { saveGame(); } catch (e) {}
+                }, };
+              }
               if (!met('srulik')) {
                 return { lines: [
                   ">The keeper of the study house looks at you the way one reads a difficult ledger: twice.",
@@ -973,6 +1065,20 @@ const TOWNS = {
               px(-1, -19 - up, 4, 1, 0x9a5a3e);                 // warm mouth
             },
             dialogue() {
+              const st = miedznoStrokes();
+              if (met('hana') && gameState.miedznoState.sawMirrorRecipes && !st.bread) {
+                return { lines: [
+                  "You read the shelf. Good. Most people look at the peel, see their own face, and stop there. Faces are the least interesting thing a mirror does.",
+                  "Backwards isn't hiding. Backwards is how you write for someone who reads from the other side. My grandmother baked for the mine. Every first loaf went down. Someone down there learned her hand — reflected.",
+                  ">She dusts the flour from her fingers and takes your wrist, turning your hand palm up, businesslike.",
+                  "The third stroke is bread's. A yod, below. Small, like a crumb, because the crumb is what's torn first and given first.",
+                  "Now you have all the hands you need. Go up before you talk yourself out of it.",
+                ], onClose: () => {
+                  st.bread = true;
+                  try { addJournalEntry('stroke_bread'); } catch (e) {}
+                  try { saveGame(); } catch (e) {}
+                }, };
+              }
               if (!met('hana')) {
                 return { lines: [
                   "Bread? The first loaf's not for sale. It goes up the hill. Don't ask — or DO ask. I'm not the Regency. Asking is allowed here.",
@@ -1381,6 +1487,7 @@ const gameState = {
   miedznoState: {
     met: {},                  // npc id -> true after first talk
     knocksAnswered: [],       // knock post ids answered during the hour
+    strokes: { flame: false, breath: false, bread: false }, // the aleph
   },
   regencyFired: {},           // per-trigger dedupe map; keys set true after firing
 
@@ -1450,6 +1557,14 @@ const TOWN_SCOPED_FIELDS = [
   'knotsGiven', 'zuzkaMetOnce', 'zuzkaSecondTalk', 'zuzkaFarewellDone',
   'firstVillageEntry', 'miedznoState',
 ];
+// The aleph is written in three strokes: a yod above, a diagonal vav,
+// a yod below. Miedźno's three threads each teach one. Lazy-init so
+// saves from before the strokes existed repair themselves on touch.
+function miedznoStrokes() {
+  const ms = gameState.miedznoState;
+  if (!ms.strokes) ms.strokes = { flame: false, breath: false, bread: false };
+  return ms.strokes;
+}
 function townKeyOf(townId) {
   const def = TOWNS[townId || gameState.currentTown || 'wyrdow'];
   if (def && def.isInterior && def.exit) return def.exit.to; // parent town
@@ -1638,6 +1753,26 @@ const JOURNAL_ENTRIES = {
 
 // ── Miedźno entries (Act 2) — grouped under M I E D Ź N O in the journal ──
 Object.assign(JOURNAL_ENTRIES, {
+  stroke_flame: {
+    title: 'The First Stroke: Flame', type: 'npc', category: 'Conversation', town: 'miedzno',
+    text: "Golda gave me a worn copper stylus and the first stroke of a letter: a yod, above, small — the way a lamp looks from far off. Every lamp in her house is somebody kept lit. The stroke is attendance, written down.",
+  },
+  stroke_breath: {
+    title: 'The Second Stroke: Breath', type: 'npc', category: 'Conversation', town: 'miedzno',
+    text: "Srulik stopped pretending it is a hill. The town BUILT him, before the Collapse — every family gave copper and a name, and Srulik's grandfather held the pen. He was made to carry the town out; the seam failed before he finished waking, so he lay down over the mine and held. Eleven years. The second stroke is the long diagonal, drawn slow. He has earned a slow hand.",
+  },
+  stroke_bread: {
+    title: 'The Third Stroke: Bread', type: 'npc', category: 'Conversation', town: 'miedzno',
+    text: "Hana's grandmother baked for the mine, and someone down there learned her hand reflected — that is why the recipes are written backwards. The third stroke is a yod, below, small like a crumb, because the crumb is torn first and given first. I have all three strokes now. The hill is waiting.",
+  },
+  sleeper_eye: {
+    title: 'The Eye Opened', type: 'observe', category: 'Discovery', town: 'miedzno',
+    text: "I wrote the aleph on the eyelid in three strokes — flame, breath, bread — and the hill opened its eye. It was not like being seen. It was like being counted, by something that has never lost count of anyone. Then the lid came down slow, a sleeper turning over, and the tear-streak ran dry for the first time in eleven years.",
+  },
+  fragment_two: {
+    title: 'Cure Codex — The Second Fragment', type: 'quest', category: 'The Cure', town: 'miedzno',
+    text: "Seven names, arranged like a recipe, held in the amber of the Sleeper's iris. Not ingredients — attendances. To be read reflected, the way Hana reads. Attended nightly, the way Golda attends. Answered the same, not fast, the way the hill answers. The seventh line is empty — VACANT, you might say. ADMINISTRATIVE. The Cure is not a substance. It is a way of keeping people lit.",
+  },
   ladder_room: {
     title: 'The Room That Stays Hers', type: 'observe', category: 'Discovery', town: 'miedzno',
     text: "At the head of The Ladder's stairs there is a door marked VACANT — ADMINISTRATIVE, and under it, in pencil, in a second hand: no. Eleven years ago a woman lodged here, paid in advance, and went up the hill. Cyla keeps the room made. The lock is polished from being checked, never from being opened. Some vacancies are a kind of attendance.",
@@ -7741,7 +7876,9 @@ Object.assign(GameScene.prototype, {
         this.interactPrompt.setVisible(true);
         if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
           this.interactPrompt.setVisible(false);
-          this.openDialogue(pt.name, pt.lines, pt.journal
+          // An examine either acts (the climb, beds) or speaks
+          if (pt.action) pt.action(this);
+          else this.openDialogue(pt.name, pt.lines, pt.journal
             ? () => { try { addJournalEntry(pt.journal); } catch (e) {} }
             : null, 'simple');
         }
@@ -12784,6 +12921,16 @@ Object.assign(GameScene.prototype, {
   _classifyForCameras(obj, forceWorld) {
     if (!obj || !this._uiCam) return obj;
     try {
+      // Objects inside a container carry NO routing bits of their own —
+      // cameras filter container children individually, so a stale stamp
+      // (from before the object was containerised) silently blanks it.
+      // The container's own classification decides for the whole family.
+      if (obj.parentContainer) {
+        obj.cameraFilter &= ~(this.cameras.main.id | this._uiCam.id);
+        const idx = this._uiObjects.indexOf(obj);
+        if (idx >= 0) this._uiObjects.splice(idx, 1);
+        return obj;
+      }
       const isUI = !forceWorld && obj.scrollFactorX === 0
         && obj.scrollFactorY === 0 && obj.depth >= 0;
       // Clear both routing bits, then set exactly one
@@ -15026,7 +15173,7 @@ class MainMenuScene extends Phaser.Scene {
       gameState.brelMode = 'neutral'; gameState.brelArrivalDelay = 0;
       gameState._noonBellRung = false;
       gameState.currentTown = 'wyrdow';
-      gameState.miedznoState = { met: {}, knocksAnswered: [] };
+      gameState.miedznoState = { met: {}, knocksAnswered: [], strokes: { flame: false, breath: false, bread: false } };
       gameState.gameHour = 8.0;
       // MARKERS is a module const — its placed flags survive Return to
       // Menu and made replayed quests unwinnable until page refresh

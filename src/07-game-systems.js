@@ -378,7 +378,9 @@ Object.assign(GameScene.prototype, {
         this.interactPrompt.setVisible(true);
         if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
           this.interactPrompt.setVisible(false);
-          this.openDialogue(pt.name, pt.lines, pt.journal
+          // An examine either acts (the climb, beds) or speaks
+          if (pt.action) pt.action(this);
+          else this.openDialogue(pt.name, pt.lines, pt.journal
             ? () => { try { addJournalEntry(pt.journal); } catch (e) {} }
             : null, 'simple');
         }
