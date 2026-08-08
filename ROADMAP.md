@@ -104,7 +104,7 @@ rhythm-lite knock, the boy = Mendel).
 | C3 | Residents: 7 town NPCs + interior casts, dialogue, schedules, breathing | ✅ Generic town-NPC engine + Hour of Knocking |
 | C4 | Fragment 2 quest line | ✅ Three strokes → the climb → the eye → names-as-recipe. Rituals/visions beyond the knock: ⬜ |
 | C5 | Interiors: The Ladder (rest/time-skip), Lamp House, Requisition Office | ✅ Shipped |
-| C6 | Wyrdów return content (Baba reacts to fragment 2, braid thread) | ⬜ |
+| C6 | Wyrdów return content (Baba reacts to fragment 2, braid thread) | ✅ The names said aloud; The Waiting Braid (six knots, one smooth) |
 | C7 | Miedźno music (Suno) + SFX; woodcut portraits for the cast | ⬜ |
 | C8 | Patrols/permit enforcement + caught→Records-Office loop | ⬜ |
 | C9 | Full multi-agent audit + human playtest of the Miedźno arc | ⬜ |
