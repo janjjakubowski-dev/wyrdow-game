@@ -26,8 +26,10 @@ Object.assign(GameScene.prototype, {
     if (!this._townNpcs) return;
     const night = gameState.gameHour >= 20 || gameState.gameHour < 6;
     for (const npc of this._townNpcs) {
-      // Schedules — same rule as Wyrdów's cast: most folk go in after dusk
-      const wantVisible = npc.def.hideAtNight ? !night : true;
+      // Schedules — def.when(scene) overrides the simple hideAtNight rule
+      // (interior casts use it: Cyla tends the inn at night, Pin files by day)
+      const wantVisible = npc.def.when ? !!npc.def.when(this)
+        : (npc.def.hideAtNight ? !night : true);
       if (npc.sprite.visible !== wantVisible) npc.sprite.setVisible(wantVisible);
       if (!npc.sprite.visible) continue;
       // Breathing frames

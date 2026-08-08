@@ -236,6 +236,381 @@ const TOWNS = {
     babaHomeAtNight: true,   // she sleeps here — village sprite hides after dusk
   },
 
+  // ── INTERIOR: The Ladder — Cyla's inn ──────────────────────────────
+  // Common room: hearth, long table, the bell, the stair that creaks on
+  // purpose, and a guest cot. Rest here to meet the hill's hours.
+  ladder_interior: {
+    id: 'ladder_interior',
+    name: 'The Ladder',
+    subtitle: 'Every rung of it accounted for, none surrendered',
+    isInterior: true,
+    size: 10,
+    map: (() => {
+      const g = [];
+      for (let y = 0; y < 10; y++) { g[y] = [];
+        for (let x = 0; x < 10; x++) g[y][x] = (x === 0 || y === 0 || x === 9 || y === 9) ? 3 : 0; }
+      g[9][4] = 0; g[9][5] = 0; // doorway south
+      return g;
+    })(),
+    entry: { x: 4.5, y: 7.6 },
+    exit: { x: 4.5, y: 8.6, radius: 0.7, to: 'miedzno', spawn: { x: 10.6, y: 16.8 } },
+    furnish(scene) {
+      const off = scene.worldOffset;
+      const at = (cx, cy) => { const i = cartToIso(cx, cy); return { x: i.x + off.x, y: i.y + off.y }; };
+      const g = scene.add.graphics();
+      // Hearth, north wall — the kettle forever on the edge of boiling
+      const st = at(2, 1.1);
+      g.fillStyle(0x4a3a34, 1); g.fillRect(st.x - 14, st.y - 48, 28, 36);
+      g.fillStyle(0x1a1a20, 1); g.fillRect(st.x - 8, st.y - 32, 16, 12);
+      g.fillStyle(0xff7b2a, 0.9); g.fillRect(st.x - 6, st.y - 28, 12, 6);
+      g.fillStyle(0x8a8a92, 1); g.fillRect(st.x - 4, st.y - 38, 8, 7); // the kettle
+      g.fillStyle(0xffc878, 0.22); g.fillCircle(st.x, st.y - 26, 20);
+      scene._interiorEmber = { x: st.x, y: st.y - 26 };
+      // The stairs, east wall — third tread drawn a shade prouder
+      for (let s = 0; s < 5; s++) {
+        const sp = at(8.6, 2.2 + s * 0.5);
+        g.fillStyle(s === 2 ? 0x7a5a34 : 0x5a3e24, 1);
+        g.fillRect(sp.x - 14, sp.y - 40 + s * 7, 26, 6);
+      }
+      // The unrented room — a door at the stairs' head, always shut
+      const rd = at(8.7, 1.2);
+      g.fillStyle(0x3a2a1c, 1); g.fillRect(rd.x - 10, rd.y - 66, 20, 30);
+      g.fillStyle(0x2a1c12, 1); g.fillRect(rd.x - 10, rd.y - 66, 20, 3);
+      g.fillStyle(0x8a8a92, 0.9); g.fillRect(rd.x + 4, rd.y - 52, 3, 3); // the lock
+      // The bell by the door, south
+      const bl = at(6.2, 8.2);
+      g.fillStyle(0x8a6a3a, 1); g.fillRect(bl.x - 1, bl.y - 40, 3, 14);
+      g.fillStyle(0xb08d57, 1); g.fillTriangle(bl.x + 0.5, bl.y - 26, bl.x - 6, bl.y - 14, bl.x + 7, bl.y - 14);
+      g.fillStyle(0x8a6a3a, 1); g.fillRect(bl.x - 1, bl.y - 14, 3, 3);
+      scene.groundLayer.add(g);
+      // Long table + benches (depth-sorted)
+      const tb = at(4.6, 4.2);
+      const table = scene.add.graphics();
+      table.fillStyle(0x000000, 0.3); table.fillEllipse(tb.x, tb.y + 4, 62, 12);
+      table.fillStyle(0x5a3e24, 1); table.fillRect(tb.x - 32, tb.y - 14, 64, 7);
+      table.fillStyle(0x6e4c2c, 1); table.fillRect(tb.x - 32, tb.y - 14, 64, 2);
+      table.fillStyle(0x3a2818, 1);
+      table.fillRect(tb.x - 28, tb.y - 7, 3, 11); table.fillRect(tb.x + 25, tb.y - 7, 3, 11);
+      // two mugs and a candle — someone was just here
+      table.fillStyle(0x7a5a3a, 1); table.fillRect(tb.x - 12, tb.y - 19, 5, 5);
+      table.fillStyle(0x7a5a3a, 1); table.fillRect(tb.x + 9, tb.y - 18, 5, 5);
+      table.fillStyle(0xe8dfc0, 1); table.fillRect(tb.x - 1, tb.y - 21, 3, 7);
+      table.fillStyle(0xffb347, 1); table.fillTriangle(tb.x + 0.5, tb.y - 25, tb.x - 1.5, tb.y - 21, tb.x + 2.5, tb.y - 21);
+      table._sortY = tb.y;
+      scene.objectLayer.add(table);
+      // Guest cot, west side — plain, clean, waiting
+      const bd = at(1.9, 6.4);
+      const bed = scene.add.graphics();
+      bed.fillStyle(0x000000, 0.3); bed.fillEllipse(bd.x, bd.y + 3, 40, 9);
+      bed.fillStyle(0x4a3420, 1); bed.fillRect(bd.x - 20, bd.y - 9, 40, 11);
+      bed.fillStyle(0x6a7a6a, 1); bed.fillRect(bd.x - 18, bd.y - 13, 36, 8);
+      bed.fillStyle(0xe8dfc0, 1); bed.fillRect(bd.x - 18, bd.y - 15, 11, 5);
+      bed._sortY = bd.y;
+      scene.objectLayer.add(bed);
+    },
+    // Cyla keeps the bar at night (daytime she is out front, in the town def)
+    npcs: [
+      {
+        id: 'cyla_inn', name: 'Cyla', x: 3.2, y: 2.2,
+        when: () => gameState.gameHour >= 20 || gameState.gameHour < 6,
+        draw(scene, g, f) {
+          g.clear(); const up = f === 1 ? 1 : 0;
+          const px = (x, y, w, h, c, a) => { g.fillStyle(c, a === undefined ? 1 : a); g.fillRect(x, y, w, h); };
+          g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 3, 16, 5);
+          px(-6, -19 - up, 12, 21 + up, 0x5a3a28);
+          px(-5, -12 - up, 10, 9, 0xd0c09a);
+          px(-4, -26 - up, 8, 7, 0xc49a7a);
+          px(-5, -29 - up, 10, 4, 0x6a2430);
+          px(-3, -24 - up, 2, 2, 0x241c14); px(1, -24 - up, 2, 2, 0x241c14);
+          px(-7, -14 - up, 3, 5, 0xc49a7a); // polishing hand out
+          px(-9, -12 - up, 4, 4, 0x7a5a3a); // the mug she is polishing
+        },
+        dialogue() {
+          const ms = gameState.miedznoState;
+          if (!ms.cylaInnTalk) {
+            return { lines: [
+              "Evening. The kettle's always on the edge of boiling. Like the town.",
+              ">She polishes a mug that is already clean, and sets it down next to seven other mugs that are already clean.",
+              "The cot's yours if the braid sent you. No charge for the first night — charge for the second, double for the third. Staying is a habit, and habits are taxed here.",
+              ms.sawRoom
+                ? "And you've seen the shut door upstairs by now. Leave it shut. It isn't locked to keep you out. It's locked to keep the room the way she left it."
+                : "Don't mind the stairs. They talk. Everything in this town talks, if you give it eleven years.",
+            ], onClose: () => { ms.cylaInnTalk = true; try { saveGame(); } catch (e) {} } };
+          }
+          return { lines: ["Rest. The hill starts knocking at the hour before the deep of night. You'll want to be awake and near a rail."] };
+        },
+      },
+    ],
+    examine: [
+      { x: 8.7, y: 1.6, radius: 1.3, prompt: '[E] The shut door',
+        name: 'The Unrented Room', journal: 'ladder_room',
+        lines: [
+          ">The door at the head of the stairs. The lock is polished from being checked, not from being opened.",
+          ">A small card in a brass frame: VACANT — ADMINISTRATIVE. Under it, in pencil, in different handwriting: no.",
+          ">Through the gap at the sill: a made bed, a folded coat, eleven years of held breath.",
+        ],
+        action(scene) {
+          gameState.miedznoState.sawRoom = true;
+          try { saveGame(); } catch (e) {}
+          scene.openDialogue('The Unrented Room', this.lines,
+            () => { try { addJournalEntry('ladder_room'); } catch (e) {} }, 'simple');
+        } },
+      { x: 8.6, y: 3.2, radius: 1.1, prompt: '[E] The third stair',
+        name: 'The Third Stair',
+        lines: [
+          ">You press the tread with your boot. It creaks — a clear, deliberate, well-maintained creak.",
+          ">Cyla oils every hinge in this house and has never once oiled this stair. A door announces guests. A stair announces intentions.",
+        ] },
+      { x: 6.2, y: 7.8, radius: 1.1, prompt: '[E] The supper bell',
+        name: 'The Supper Bell',
+        lines: [
+          ">Copper, of course. Somebody has scratched a word into the inside of the rim where the Requisition men would have to turn it over to find it.",
+          ">The word is: OURS.",
+        ] },
+      { x: 1.9, y: 6.4, radius: 1.1, prompt: '[E] Rest on the guest cot',
+        name: 'The Guest Cot',
+        lines: [],
+        action(scene) {
+          const h = gameState.gameHour;
+          if (h >= 6 && h < 20) {
+            scene._restUntil(20.4, 'You wake into the blue hour. Somewhere below the floor, something is getting ready to knock.');
+          } else {
+            scene._restUntil(7.0, 'You wake to bread smoke and cart wheels. Miedźno pretends to be an ordinary town again.');
+          }
+        } },
+    ],
+  },
+
+  // ── INTERIOR: The Lamp House — Golda's attendance ──────────────────
+  lamphouse_interior: {
+    id: 'lamphouse_interior',
+    name: 'The Lamp House',
+    subtitle: 'Sentimental combustion, per the Regency',
+    isInterior: true,
+    size: 8,
+    map: (() => {
+      const g = [];
+      for (let y = 0; y < 8; y++) { g[y] = [];
+        for (let x = 0; x < 8; x++) g[y][x] = (x === 0 || y === 0 || x === 7 || y === 7) ? 3 : 0; }
+      g[7][3] = 0; g[7][4] = 0; // doorway south
+      return g;
+    })(),
+    entry: { x: 3.5, y: 5.6 },
+    exit: { x: 3.5, y: 6.6, radius: 0.7, to: 'miedzno', spawn: { x: 5.4, y: 16.8 } },
+    furnish(scene) {
+      const off = scene.worldOffset;
+      const at = (cx, cy) => { const i = cartToIso(cx, cy); return { x: i.x + off.x, y: i.y + off.y }; };
+      const g = scene.add.graphics();
+      // Three shelf tiers along the north wall, dense with lamps.
+      // Every lamp is somebody. The flames are drawn breathing in update
+      // via _interiorEmber only for the big glow; small flames are static.
+      let lampIdx = 0;
+      for (let tier = 0; tier < 3; tier++) {
+        const sh = at(1.2 + tier * 0.02, 1.05);
+        const y0 = sh.y - 58 + tier * 16;
+        g.fillStyle(0x4a3420, 1); g.fillRect(sh.x - 8, y0 + 10, 150, 3);
+        for (let i = 0; i < 11; i++) {
+          const lx = sh.x - 2 + i * 13;
+          g.fillStyle(0x3a2818, 1); g.fillRect(lx, y0, 7, 10);
+          g.fillStyle(0xf0e8d0, 0.35); g.fillRect(lx + 1, y0 + 1, 5, 8);
+          // One lamp at the back burns a colour the others don't
+          const odd = tier === 0 && i === 8;
+          g.fillStyle(odd ? 0x5ec0a4 : 0xffb347, odd ? 0.95 : 0.85);
+          g.fillRect(lx + 2, y0 + 3, 3, 4);
+          if (odd) { g.fillStyle(0x5ec0a4, 0.18); g.fillCircle(lx + 3, y0 + 5, 12); }
+          lampIdx++;
+        }
+      }
+      // Attendance ledger on a lectern, east
+      const lc = at(6.2, 2.4);
+      g.fillStyle(0x4a3420, 1); g.fillRect(lc.x - 2, lc.y - 26, 4, 20);
+      g.fillStyle(0x5a3e24, 1); g.fillRect(lc.x - 10, lc.y - 34, 20, 9);
+      g.fillStyle(0xd8c8a0, 1); g.fillRect(lc.x - 8, lc.y - 33, 16, 7);
+      g.fillStyle(0x2a2a2e, 0.8); g.fillRect(lc.x - 6, lc.y - 31, 12, 1);
+      g.fillStyle(0x2a2a2e, 0.6); g.fillRect(lc.x - 6, lc.y - 29, 9, 1);
+      scene.groundLayer.add(g);
+      // Oil and wick table (depth-sorted)
+      const tb = at(4.6, 4.4);
+      const table = scene.add.graphics();
+      table.fillStyle(0x000000, 0.3); table.fillEllipse(tb.x, tb.y + 3, 40, 9);
+      table.fillStyle(0x5a3e24, 1); table.fillRect(tb.x - 20, tb.y - 12, 40, 6);
+      table.fillStyle(0x7a9a8a, 0.8); table.fillRect(tb.x - 14, tb.y - 20, 6, 9); // oil jar
+      table.fillStyle(0xd8d8c8, 0.7); table.fillRect(tb.x + 4, tb.y - 17, 10, 4); // wicks
+      table._sortY = tb.y;
+      scene.objectLayer.add(table);
+      // The whole room breathes lamplight
+      const centre = at(3.5, 3);
+      scene._interiorEmber = { x: centre.x, y: centre.y - 30 };
+    },
+    npcs: [
+      {
+        id: 'golda_lamps', name: 'Golda', x: 2.4, y: 2.6, // at the wick table — clear of the shelves
+        when: () => gameState.gameHour >= 20 || gameState.gameHour < 6,
+        draw(scene, g, f) {
+          g.clear(); const up = f === 1 ? 1 : 0;
+          const px = (x, y, w, h, c, a) => { g.fillStyle(c, a === undefined ? 1 : a); g.fillRect(x, y, w, h); };
+          g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 3, 15, 5);
+          px(-6, -18 - up, 12, 20 + up, 0x4a3a2e);
+          px(-8, -13, 5, 4, 0x3a2818);          // the lamp, raised to a wick
+          px(-7, -12, 3, 2, 0xffd890, 0.9);
+          g.fillStyle(0xffd890, 0.16); g.fillCircle(-6, -11, 10);
+          px(-4, -25 - up, 8, 7, 0xb89478);
+          px(-5, -28 - up, 10, 4, 0x8a6a2a);
+          px(-3, -23 - up, 2, 2, 0x241c14); px(1, -23 - up, 2, 2, 0x241c14);
+        },
+        dialogue() {
+          const ms = gameState.miedznoState;
+          if (ms.sawOddLamp && !ms.goldaOddLampTalk) {
+            return { lines: [
+              ">She doesn't look up from the wick she is trimming.",
+              "You found it, then. Third shelf, ninth from the left.",
+              "Every lamp in this room, I lit. That one, I didn't. It lit itself the night the hill closed its eye, and it has never once needed oil.",
+              "The Regency inventoried this room twice. Both times, their count came out one lamp short. Their ledgers cannot see it.",
+              ">She sets down the scissors, finally, and looks at you.",
+              "We don't know whose it is. We keep attendance anyway. That's the whole of religion, if you ask me, which nobody does.",
+            ], onClose: () => { ms.goldaOddLampTalk = true; try { addJournalEntry('lamp_odd'); } catch (e) {} try { saveGame(); } catch (e) {} }, };
+          }
+          return { lines: [
+            "Mind your sleeves near the flames. These lamps have opinions about visitors' coats.",
+            "Look, if you must. Count, if you dare. Counting goes strangely in here.",
+          ] };
+        },
+      },
+    ],
+    examine: [
+      { x: 5.8, y: 1.5, radius: 1.2, prompt: '[E] The odd lamp',
+        name: 'The Odd Lamp',
+        lines: [
+          ">Third shelf, ninth from the left. Its flame is verdigris — the exact colour of the hill's tear-streak.",
+          ">The glass is warm on the side facing the hill. The other side is cold.",
+          ">It is burning without oil. The reservoir is dry, and has been, by the dust in it, for years.",
+        ],
+        action(scene) {
+          gameState.miedznoState.sawOddLamp = true;
+          try { saveGame(); } catch (e) {}
+          scene.openDialogue('The Odd Lamp', this.lines, null, 'simple');
+        } },
+      { x: 6.2, y: 2.8, radius: 1.1, prompt: '[E] The attendance ledger',
+        name: 'The Attendance Ledger',
+        lines: [
+          ">Names, in columns, in a fine hand. Not of the living — of the lamps.",
+          ">Each has a wick-trimming date and a small note. 'Steady.' 'Guttered twice — his widow visited.' 'Burns tall on Fridays.'",
+          ">The last line has no name. Just: 'the ninth one. steady. steady. steady.'",
+        ] },
+    ],
+  },
+
+  // ── INTERIOR: The Requisition Office — where the town is counted ───
+  records_interior: {
+    id: 'records_interior',
+    name: 'The Requisition Office',
+    subtitle: 'Forms are provided. Forms are the point.',
+    isInterior: true,
+    size: 9,
+    map: (() => {
+      const g = [];
+      for (let y = 0; y < 9; y++) { g[y] = [];
+        for (let x = 0; x < 9; x++) g[y][x] = (x === 0 || y === 0 || x === 8 || y === 8) ? 3 : 0; }
+      g[8][4] = 0; g[8][5] = 0; // doorway south
+      return g;
+    })(),
+    entry: { x: 4.5, y: 6.6 },
+    exit: { x: 4.5, y: 7.6, radius: 0.7, to: 'miedzno', spawn: { x: 3.5, y: 22.7 } },
+    furnish(scene) {
+      const off = scene.worldOffset;
+      const at = (cx, cy) => { const i = cartToIso(cx, cy); return { x: i.x + off.x, y: i.y + off.y }; };
+      const g = scene.add.graphics();
+      // File wall, north — zinc-grey drawers floor to ceiling
+      for (let col = 0; col < 6; col++) {
+        for (let row = 0; row < 4; row++) {
+          const d = at(1.4 + col * 1.0, 1.05);
+          const y0 = d.y - 56 + row * 12;
+          g.fillStyle(0x6a7280, 1); g.fillRect(d.x - 6, y0, 14, 10);
+          g.fillStyle(0x8a92a0, 1); g.fillRect(d.x - 6, y0, 14, 2);
+          g.fillStyle(0xe8e8e0, 0.9); g.fillRect(d.x - 1, y0 + 5, 4, 2);
+        }
+      }
+      // The poster, east wall
+      const po = at(7.4, 1.1);
+      g.fillStyle(0xe8e8e0, 1); g.fillRect(po.x - 11, po.y - 52, 22, 28);
+      g.fillStyle(0x5a3a70, 1); g.fillRect(po.x - 11, po.y - 52, 22, 5);
+      g.fillStyle(0x2a2a2e, 0.8);
+      g.fillRect(po.x - 8, po.y - 43, 16, 1); g.fillRect(po.x - 8, po.y - 40, 16, 1);
+      g.fillRect(po.x - 8, po.y - 37, 12, 1); g.fillRect(po.x - 8, po.y - 34, 14, 1);
+      g.fillRect(po.x - 8, po.y - 31, 9, 1);
+      scene.groundLayer.add(g);
+      // The counter — a bar of official distance (depth-sorted)
+      const ct = at(4.5, 3.6);
+      const counter = scene.add.graphics();
+      counter.fillStyle(0x000000, 0.3); counter.fillEllipse(ct.x, ct.y + 4, 70, 12);
+      counter.fillStyle(0x6a7280, 1); counter.fillRect(ct.x - 36, ct.y - 16, 72, 18);
+      counter.fillStyle(0x8a92a0, 1); counter.fillRect(ct.x - 36, ct.y - 16, 72, 3);
+      // form stacks + the little bell
+      counter.fillStyle(0xe8e8e0, 1); counter.fillRect(ct.x - 28, ct.y - 21, 12, 5);
+      counter.fillStyle(0xd8d8d0, 1); counter.fillRect(ct.x - 26, ct.y - 23, 12, 4);
+      counter.fillStyle(0xb08d57, 1); counter.fillEllipse(ct.x + 22, ct.y - 19, 8, 6);
+      counter.fillStyle(0x8a6a3a, 1); counter.fillRect(ct.x + 21, ct.y - 23, 2, 3);
+      counter._sortY = ct.y;
+      scene.objectLayer.add(counter);
+      // No ember here. The office is lit by nothing in particular.
+    },
+    npcs: [
+      {
+        id: 'pin_office', name: 'Enumerator Pin', x: 4.2, y: 2.4,
+        when: () => gameState.gameHour >= 6 && gameState.gameHour < 20,
+        draw(scene, g, f) {
+          g.clear(); const up = f === 1 ? 1 : 0;
+          const px = (x, y, w, h, c, a) => { g.fillStyle(c, a === undefined ? 1 : a); g.fillRect(x, y, w, h); };
+          g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 3, 13, 5);
+          px(-5, -17 - up, 10, 19 + up, 0x7a828e);
+          px(-8, -11 - up, 4, 6, 0xe8e8e0);
+          px(3, -8, 2, 2, 0x1a1a2e);
+          px(-4, -24 - up, 8, 7, 0xd0b49a);
+          px(-4, -26 - up, 8, 2, 0x4a3a2a);
+          px(-3, -22 - up, 2, 2, 0x241c14); px(1, -22 - up, 2, 2, 0x241c14);
+        },
+        dialogue() {
+          const ms = gameState.miedznoState;
+          if (!ms.pinOfficeTalk) {
+            return { lines: [
+              ">Behind the counter, Pin is holding one form up to the light as if it owed him something.",
+              "Oh. You. Officially I have to ask if you're here to file. Nobody is ever here to file.",
+              ">He lowers the form and his voice at the same time.",
+              "You want to know about the sevens. Everyone decent eventually does. Eleven years ago the census sevens started going missing. Person number seven on any street. Seventh child. Seventh year of employment. The files exist — look, drawer after drawer — but page seven is always... elsewhere.",
+              "The Overseer says it is a clerical artefact. I have started to think it is a door.",
+              ">He stamps the form. The stamp says RECEIVED, though nothing has been.",
+            ], onClose: () => { ms.pinOfficeTalk = true; try { addJournalEntry('sevens'); } catch (e) {} try { saveGame(); } catch (e) {} } };
+          }
+          return { lines: [
+            "If the Overseer asks, you were filing. Take a form. Everyone should carry a form; they're better than permits and almost as good as doors.",
+          ] };
+        },
+      },
+    ],
+    examine: [
+      { x: 7.2, y: 1.6, radius: 1.2, prompt: '[E] The poster',
+        name: 'The Poster',
+        lines: [
+          ">SURRENDER SENTIMENT. IT IS SAFER MELTED.",
+          ">Below, in smaller print: charms of copper, thread, glass, or seed accepted at the crucible daily. Receipts provided. Grief processed in order of arrival.",
+          ">Somebody has drawn, very faintly, in pencil, in the corner: a little bell. Ringing.",
+        ] },
+      { x: 6.6, y: 3.2, radius: 1.2, prompt: '[E] Ring the counter bell',
+        name: 'The Counter Bell',
+        lines: [
+          ">You ring the bell. It makes a flat, administrative clink — copper, but copper that has given up.",
+          ">Nobody comes. Somewhere in the files, something answers it with one soft knock.",
+        ] },
+      { x: 1.8, y: 1.6, radius: 1.4, prompt: '[E] The census drawers',
+        name: 'The Census Drawers', requires: () => gameState.miedznoState.pinOfficeTalk,
+        lines: [
+          ">You slide one open while Pin is devoted to not noticing.",
+          ">MIEDŹNO — RESIDENTS — VOL IV. The pages are numbered 1, 2, 3, 4, 5, 6, 8. The paper between 6 and 8 is not torn out. It is simply not there.",
+          ">On page 8, the entries continue mid-sentence, as if the missing page is still happening somewhere.",
+        ] },
+    ],
+  },
+
   // ── MIEDŹNO — the Copper Hill, v1 topology (Phase C per TOWN2_BRIEF) ──
   // The hill is not a hill. NE quadrant: the Sleeper's mass with a
   // switchback terrace path. Town in the crook of its arm. Requisition
@@ -287,7 +662,16 @@ const TOWNS = {
       // Verdigris grade — oxidized copper over everything; no warm centre
       groundGrade: { r: 0.62, g: 0.86, b: 0.8, warmCenter: false },
       interiors: {}, patrols: [], checkpoints: [], charms: [], zLevels: null,
-      doors: [],
+      doors: [
+        { x: 10.6, y: 16.15, radius: 0.55, to: 'ladder_interior',
+          prompt: '[E] Enter The Ladder' },
+        { x: 5.4, y: 16.15, radius: 0.55, to: 'lamphouse_interior',
+          prompt: '[E] Enter the lamp house',
+          // The lamps are particular about strangers — Golda vouches first
+          requires: () => gameState.miedznoState.met.golda },
+        { x: 3.5, y: 22.05, radius: 0.55, to: 'records_interior',
+          prompt: '[E] Enter the Requisition Office' },
+      ],
       // First voice of the Copper Hill — three examine beats + Srulik
       examines: [
         { x: 18, y: 4.4, radius: 1.6, prompt: '[E] The tear-streak',
@@ -360,7 +744,7 @@ const TOWNS = {
             },
           },
           {
-            id: 'golda', name: 'Golda', x: 6.2, y: 16.3, hideAtNight: false, // the lamps burn all night
+            id: 'golda', name: 'Golda', x: 6.6, y: 16.5, hideAtNight: true, // at night she is INSIDE, attending
             draw(scene, g, f) {
               g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
               shadow(g, 15);
@@ -389,7 +773,7 @@ const TOWNS = {
             },
           },
           {
-            id: 'cyla', name: 'Cyla', x: 10.5, y: 16.3, hideAtNight: true,
+            id: 'cyla', name: 'Cyla', x: 9.6, y: 16.6, hideAtNight: true, // night: behind her own bar
             draw(scene, g, f) {
               g.clear(); const px = P(g); const up = f === 1 ? 1 : 0;
               shadow(g, 16);
@@ -1101,6 +1485,18 @@ const JOURNAL_ENTRIES = {
 
 // ── Miedźno entries (Act 2) — grouped under M I E D Ź N O in the journal ──
 Object.assign(JOURNAL_ENTRIES, {
+  ladder_room: {
+    title: 'The Room That Stays Hers', type: 'observe', category: 'Discovery', town: 'miedzno',
+    text: "At the head of The Ladder's stairs there is a door marked VACANT — ADMINISTRATIVE, and under it, in pencil, in a second hand: no. Eleven years ago a woman lodged here, paid in advance, and went up the hill. Cyla keeps the room made. The lock is polished from being checked, never from being opened. Some vacancies are a kind of attendance.",
+  },
+  lamp_odd: {
+    title: 'The Ninth Lamp', type: 'observe', category: 'Discovery', town: 'miedzno',
+    text: "In the lamp house, third shelf, ninth from the left: a flame the colour of the hill's tear-streak, burning steady in a lamp with no oil. Golda didn't light it. It lit itself the night the hill closed its eye, and the Regency's inventories cannot see it. The lamp keepers keep attendance on it anyway. 'Steady. Steady. Steady.'",
+  },
+  sevens: {
+    title: 'The Missing Sevens', type: 'npc', category: 'Conversation', town: 'miedzno',
+    text: "Enumerator Pin, quietly, behind the counter: eleven years of census files where page seven is always elsewhere. Not torn out — simply not there, while the entries on page eight continue mid-sentence. The seventh person on any street. The seventh child. The Overseer calls it a clerical artefact. Pin has started to think it is a door.",
+  },
   srulik_referral: {
     title: 'Srulik: Written Ahead', type: 'npc', category: 'Conversation', town: 'miedzno',
     text: "The keeper of the study house read me twice before speaking once. Baba wrote ahead — she always writes ahead. He would not talk about the hill with the office watching, but he said one thing anyway, quietly, like a man leaving a door unlocked: it was built kindly. And it is very tired.",

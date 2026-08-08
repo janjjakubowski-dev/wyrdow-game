@@ -38,6 +38,31 @@ Object.assign(GameScene.prototype, {
       this.scene.restart({ firstVisit: false, spawn: def.entry });
     });
   },
+  // ── Rest — the LBA time control. A bed skips the clock forward so the
+  //    player can MEET the world's hours (the knocking hour above all)
+  //    instead of loitering through them.
+  _restUntil(targetHour, line) {
+    if (this._transitioning) return;
+    this._transitioning = true; // freezes the interior loop through the fade
+    const cam = this.cameras.main;
+    cam.fadeOut(700, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      // Sleeping past midnight must do dawn's housekeeping by hand —
+      // the 6:00 crossing never ticks through updateGameClock
+      const dawnCrossed = targetHour < gameState.gameHour
+        || (gameState.gameHour < 6 && targetHour >= 6);
+      gameState.gameHour = targetHour;
+      if (dawnCrossed) {
+        gameState._nightTurnDone = false;
+        gameState._noonBellRung = false;
+        gameState.weatherToday = null; // the village re-deals on arrival
+      }
+      try { saveGame(); } catch (e) {}
+      this._transitioning = false;
+      cam.fadeIn(900, 0, 0, 0);
+      if (line) this.showItemNotification(line);
+    });
+  },
   _exitInterior() {
     if (this._transitioning) return;
     this._transitioning = true;
@@ -109,8 +134,10 @@ Object.assign(GameScene.prototype, {
     }
     this.groundLayer.add(walls);
 
-    // ── Baba's room, if this is her house ──
+    // ── Furnishing: Baba's room is hand-built; every interior after
+    //    carries its own furnish(scene) on the TownDefinition ──
     if (T.id === 'baba_house_interior') this._furnishBabaHouse();
+    if (T.furnish) T.furnish(this);
 
     // ── Player ──
     this.createPlayer();
@@ -163,6 +190,9 @@ Object.assign(GameScene.prototype, {
       color: '#aa9966', stroke: '#111111', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 1).setDepth(998).setVisible(false);
     this._examinePoints = T.examine || [];
+
+    // Interior casts ride the same data-driven NPC system as the towns
+    this.createTownNpcs();
 
     // ── Baba is home after dusk — asleep-adjacent, but never surprised ──
     const nightNow = gameState.gameHour >= 20 || gameState.gameHour < 6;
@@ -298,6 +328,7 @@ Object.assign(GameScene.prototype, {
     this.handleMovement(delta);
     this.updatePlayerPosition();
     this.sortObjects();
+    this.updateTownNpcs(time, delta);
     // Ember breathing
     if (this._interiorEmber) {
       if (!this._emberGfx) { this._emberGfx = this.add.graphics(); this._emberGfx.setDepth(996); }
@@ -328,8 +359,10 @@ Object.assign(GameScene.prototype, {
       const bt = Math.floor(time / 1600) % 2;
       if (bt !== this.babaFrame) { this.babaFrame = bt; this.drawBabaFrame(bt); }
     }
+    if (!promptShown) promptShown = this.tryTownNpcInteraction();
     if (!promptShown) {
       for (const pt of this._examinePoints || []) {
+        if (pt.requires && !pt.requires()) continue;
         const pd = Math.hypot(this.playerCartX - pt.x, this.playerCartY - pt.y);
         if (pd > pt.radius) continue;
         promptShown = true;
@@ -340,7 +373,9 @@ Object.assign(GameScene.prototype, {
         this.interactPrompt.setVisible(true);
         if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
           this.interactPrompt.setVisible(false);
-          this.openDialogue(pt.name, pt.lines, pt.journal
+          // An examine either acts (beds, levers) or speaks (everything else)
+          if (pt.action) pt.action(this);
+          else this.openDialogue(pt.name, pt.lines, pt.journal
             ? () => { try { addJournalEntry(pt.journal); } catch (e) {} }
             : null, 'simple');
         }
