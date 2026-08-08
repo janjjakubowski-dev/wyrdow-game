@@ -704,6 +704,7 @@ const TOWNS = {
             scene.openDialogue('The Sleeper', this.lines, () => {
               gameState.miedznoState.eyeOpened = true;
               gameState.miedznoState.fragment2Collected = true;
+              gameState.inventory.push('cure_codex_fragment_2');
               try { addJournalEntry('sleeper_eye'); addJournalEntry('fragment_two'); } catch (e) {}
               try { saveGame(); } catch (e) {}
               try { scene.showItemNotification('The second fragment of the Cure Codex — the names — is yours.'); } catch (e) {}
@@ -1402,7 +1403,9 @@ const TOWN_SCOPED_FIELDS = [
   'domovoiState', 'dziadekState', 'martaState', 'knotsPlaced',
   'questActive', 'questComplete', 'codexFragmentCollected', 'babaMetOnce',
   'knotsGiven', 'zuzkaMetOnce', 'zuzkaSecondTalk', 'zuzkaFarewellDone',
-  'firstVillageEntry', 'miedznoState',
+  'firstVillageEntry',
+  // NOTE: miedznoState is deliberately NOT here — Wyrdów must see
+  // fragment 2 to react to it. One arc, one truth, carried flat.
 ];
 // The aleph is written in three strokes: a yod above, a diagonal vav,
 // a yod below. Miedźno's three threads each teach one. Lazy-init so
@@ -1478,6 +1481,25 @@ function loadGame() {
     // ending never finished (act1Complete unset) — let it re-fire so the
     // Act 1 ending isn't permanently lost
     if (gameState.brelSceneFired && !gameState.act1Complete) gameState.brelSceneFired = false;
+    // miedznoState went global (Wyrdów reacts to fragment 2). Older saves
+    // kept per-town copies: adopt the richest one, strip the rest.
+    try {
+      let best = gameState.miedznoState;
+      let bestLen = JSON.stringify(best || {}).length;
+      Object.values(gameState.towns || {}).forEach(b => {
+        if (b && b.miedznoState) {
+          const len = JSON.stringify(b.miedznoState).length;
+          if (len > bestLen) { best = b.miedznoState; bestLen = len; }
+          delete b.miedznoState;
+        }
+      });
+      if (best) gameState.miedznoState = best;
+    } catch (e) {}
+    // Fragment 2 predates its inventory item — repair on load
+    if (gameState.miedznoState && gameState.miedznoState.fragment2Collected
+      && !(gameState.inventory || []).includes('cure_codex_fragment_2')) {
+      gameState.inventory.push('cure_codex_fragment_2');
+    }
     gameState.hasSave = true;
     return true;
   } catch (e) { console.warn('loadGame failed', e); return false; }
@@ -1600,6 +1622,10 @@ const JOURNAL_ENTRIES = {
 
 // ── Miedźno entries (Act 2) — grouped under M I E D Ź N O in the journal ──
 Object.assign(JOURNAL_ENTRIES, {
+  baba_names: {
+    title: 'Six Knots and a Seventh', type: 'npc', category: 'Conversation', town: 'wyrdow',
+    text: "I said the names aloud in Baba's half-packed house — she would not let me show her paper. Her hands tied six knots in blue thread while she pretended not to listen. She knew Rivka: the thread-seller who stopped coming when the mine closed. And she said the thing she has hated suspecting for thirty years — the Cure is not a tincture. It is a recipe of attendances, which cannot be confiscated, only interrupted. I carry the braid now. Six knots. The seventh is mine to tie, when I learn the name. She looked at my hand when she said it.",
+  },
   stroke_flame: {
     title: 'The First Stroke: Flame', type: 'npc', category: 'Conversation', town: 'miedzno',
     text: "Golda gave me a worn copper stylus and the first stroke of a letter: a yod, above, small — the way a lamp looks from far off. Every lamp in her house is somebody kept lit. The stroke is attendance, written down.",
@@ -1673,6 +1699,8 @@ Object.assign(JOURNAL_ENTRIES, {
 const ITEM_NAMES = {
   thread_knots:          'Enchanted Thread Knots',
   cure_codex_fragment_1: 'Cure Codex Fragment',
+  cure_codex_fragment_2: 'Cure Codex Fragment II',
+  waiting_braid:         'The Waiting Braid',
   glass_charm:           'Glass Charm',
   firefly:               'Sleeping Firefly',
   burnt_braid:           'Burnt Braid',
@@ -1801,6 +1829,28 @@ const BABA_DIALOGUE = {
     "The Stitched Circle will carry on. We always do. That's rather the point of us.",
     ">She presses something small into your hand — a burnt braid, tied into a bracelet.",
     "My mother's. Keep it. When you reach the Tenth City — and I believe you will — burn it at the gate. She always wanted to see what was inside. One of us should get to.",
+  ],
+
+  // The return with the second fragment — the names, said aloud
+  act2_names: [
+    ">Half the jars are in crates. She is packing the house the way she does everything: furiously, and in the correct order.",
+    ">You start to unfold what the hill gave you. She puts her hands behind her back, like a woman refusing to touch a hot stove.",
+    "Not on paper. Paper can be requisitioned. Say them.",
+    ">So you say them, the way the eye held them: Rivka. Icyk. Sura. Mendel the Elder. Bronia. Szymon. And the seventh line, held open.",
+    ">Somewhere in the middle, her hands come out from behind her back, find a length of blue thread, and begin — without her once looking down — to tie knots.",
+    "Rivka. There was a Miedźno thread-seller at the autumn fairs. Wouldn't sell to just anyone — you had to show her your mending first. When the mine closed she stopped coming, and I let myself believe that towns simply drift.",
+    ">The needle-quick fingers stop on the sixth knot.",
+    "So. The Cure is not a tincture. I have suspected that for thirty years and hated every single day of the suspicion. A recipe of attendances. Kept lit. Read reflected. Answered the same, not fast. A thing that cannot be confiscated — only interrupted.",
+    ">She holds the thread up between you: six knots, and a seventh length left deliberately smooth.",
+    "Carry it. When you learn who the seventh is — and child, I am very much afraid you already suspect — you will tie that knot yourself. My hands would want to do it for you. It is not mine to do.",
+    ">She looks at the mark on your hand exactly one moment too long. Then she is loudly busy with jars.",
+  ],
+
+  // Act 2+ repeat visits once the names have been said
+  act2_afterNames: [
+    "Six knots. Keep them dry, keep them named, keep walking.",
+    "The Circle is stitching your seven into the waystones — quietly. If an attendance can be interrupted, then an attendance in forty places is forty separate interruptions, each requiring its own form. We have become very fond of paperwork, suddenly.",
+    "Go on, cure-bearer. The seventh knot is waiting for its name.",
   ],
 
   // Subsequent Act 2+ visits after giving the braid

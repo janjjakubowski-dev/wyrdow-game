@@ -860,6 +860,23 @@ Object.assign(GameScene.prototype, {
           },
         };
       }
+      // The second fragment come home — the names, said aloud (C6)
+      const ms = gameState.miedznoState || {};
+      if (ms.fragment2Collected && !ms.babaNamesTalk) {
+        return {
+          lines: BABA_DIALOGUE.act2_names,
+          onClose: () => {
+            ms.babaNamesTalk = true;
+            gameState.inventory.push('waiting_braid');
+            try { addJournalEntry('baba_names'); } catch (e) {}
+            this.showItemNotification('Received: The Waiting Braid');
+            try { saveGame(); } catch (e) {}
+          },
+        };
+      }
+      if (ms.babaNamesTalk) {
+        return { lines: BABA_DIALOGUE.act2_afterNames, onClose: null };
+      }
       return {
         lines: BABA_DIALOGUE.act2_repeat,
         onClose: null,
