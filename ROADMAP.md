@@ -90,22 +90,24 @@ discovery, and Baba home after dusk — the first NPC daily routine.
 verified via JavaScriptCore; run the preview flow (Wyrdów → east road → Miedźno stub →
 home) before deploying.
 
-## Phase C — Act 2 *(3–5 sessions)*
+## Phase C — Act 2: Miedźno, the Copper Hill *(3–5 sessions)*
 
-**Design first, then build.** Leading candidate consistent with planted hooks: a **forest
-settlement** where the Stitched Circle regroups around Baba; patron spirit from Slavic
-canon (Leshy as forest keeper, or Rusalka if we run water through it) — settled by the
-design panel (see multi-agent plan).
+**Settled by TOWN2_BRIEF (canon):** the copper-hill town where the Sleeper — a golem the
+town built before the Collapse — lies over the failed mine. All five design decisions
+locked (Sleeper built-then-woken, Vosk irredeemable, fragment 2 = names-as-recipe,
+rhythm-lite knock, the boy = Mendel).
 
-| # | Task |
-|---|------|
-| C1 | Town 2 design brief (multi-agent judge panel → your approval) |
-| C2 | Map + architecture set: new tiles, tree density, palette shift, landmark |
-| C3 | 4–6 new NPCs: hero-fidelity sprites, dialogue trees, idle animations |
-| C4 | Fragment 2 quest line + 2–3 new rituals + new vision set |
-| C5 | Wyrdów return content (Baba gone, braid handover, village state changes) |
-| C6 | New music (Suno) + SFX additions; journal entries + illustrations |
-| C7 | Full multi-agent audit + human playtest |
+| # | Task | Status |
+|---|------|--------|
+| C1 | Town 2 design brief → approval | ✅ TOWN2_BRIEF.md, decisions locked |
+| C2 | Map + architecture: hill mass, terraces, verdigris grade, landmark face | ✅ v1 shipped (B8 z-levels still pending) |
+| C3 | Residents: 7 town NPCs + interior casts, dialogue, schedules, breathing | ✅ Generic town-NPC engine + Hour of Knocking |
+| C4 | Fragment 2 quest line | ✅ Three strokes → the climb → the eye → names-as-recipe. Rituals/visions beyond the knock: ⬜ |
+| C5 | Interiors: The Ladder (rest/time-skip), Lamp House, Requisition Office | ✅ Shipped |
+| C6 | Wyrdów return content (Baba reacts to fragment 2, braid thread) | ⬜ |
+| C7 | Miedźno music (Suno) + SFX; woodcut portraits for the cast | ⬜ |
+| C8 | Patrols/permit enforcement + caught→Records-Office loop | ⬜ |
+| C9 | Full multi-agent audit + human playtest of the Miedźno arc | ⬜ |
 
 ## Phase D — Acts 3 & 4 *(3–4 sessions each)*
 
